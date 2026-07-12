@@ -585,11 +585,13 @@
           specialMarks.push('⚔️')
         }
         const playedBreakdown = [
-          { key: 'knights', label: 'K' },
-          { key: 'monopoly', label: 'M' },
-          { key: 'roadBuilding', label: 'RB' },
-          { key: 'yearOfPlenty', label: 'Y' }
-        ].map((entry) => `<span class="mini-pill">${entry.label}:${slot.playedDevelopmentCards?.[entry.key] || 0}</span>`).join('')
+          { key: 'knights', label: '⚔️' },
+          { key: 'monopoly', label: '⛓️' },
+          { key: 'roadBuilding', label: '🛣️' },
+          { key: 'yearOfPlenty', label: '🌾' }
+        ].filter((entry) => (slot.playedDevelopmentCards?.[entry.key] || 0) > 0)
+          .map((entry) => `<span class="mini-pill" title="${entry.key}">${entry.label}</span>`)
+          .join('')
         item.innerHTML = `
           <div>
             <div style="color:${slot.color}; font-weight:700;">${slot.name}${specialMarks.length ? ` ${specialMarks.join(' ')}` : ''}</div>
@@ -598,7 +600,6 @@
           <div class="player-metrics">
             <span class="badge-pill" title="Resource cards">${resourceTotal}</span>
             <span class="badge-pill badge-pill-green" title="Hidden dev cards">${devTotal}</span>
-            <span class="badge-pill" title="Played dev cards">${playedDevTotal}</span>
           </div>
         `
         playerList.appendChild(item)
