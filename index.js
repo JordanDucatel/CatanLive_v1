@@ -30,6 +30,21 @@ function addEvent(message) {
   }
 }
 
+function resolvePlayer(playerId, providedName) {
+  const player = players.find((entry) => entry.id === playerId)
+
+  if (!player) {
+    return null
+  }
+
+  const displayName = (providedName || player.name || '').trim()
+
+  return {
+    player,
+    displayName: displayName || player.name
+  }
+}
+
 function resetGameState() {
   players.splice(0, players.length)
   eventLog.splice(0, eventLog.length)
@@ -128,105 +143,115 @@ app
       return res.status(400).json({ error: 'A player identity is required.' })
     }
 
-    const player = players.find((entry) => entry.id === playerId && entry.name === name)
+    const player = players.find((entry) => entry.id === playerId && entry.name === name) || players.find((entry) => entry.name === name)
 
     if (!player) {
-      return res.status(404).json({ error: 'Player not found.' })
+      return res.status(404).json({ error: 'Player not found.', canJoin: true })
     }
 
     return res.json({ playerId: player.id, name: player.name, state: getState() })
   })
   .post('/count', (req, res) => {
     const playerId = Number(req.body?.playerId)
-    const player = players.find((entry) => entry.id === playerId)
+    const resolved = resolvePlayer(playerId, req.body?.playerName)
 
-    if (!player) {
+    if (!resolved) {
       return res.status(404).json({ error: 'Player not found.' })
     }
 
+    const { player, displayName } = resolved
     player.count += 1
-    addEvent(`${player.name} pressed Count.`)
+    addEvent(`${displayName} pressed Count.`)
     broadcastState()
 
     return res.json({ state: getState() })
   })
   .post('/roll-dice', (req, res) => {
     const playerId = Number(req.body?.playerId)
-    const player = players.find((entry) => entry.id === playerId)
+    const resolved = resolvePlayer(playerId, req.body?.playerName)
 
-    if (!player) {
+    if (!resolved) {
       return res.status(404).json({ error: 'Player not found.' })
     }
 
+    const { player, displayName } = resolved
     const roll = dicePool[Math.floor(Math.random() * dicePool.length)]
     lastRoll = roll
-    lastRollBy = player.name
-    addEvent(`${player.name} rolled a ${roll}.`)
+    lastRollBy = displayName
+    addEvent(`${displayName} rolled a ${roll}.`)
     broadcastState()
 
     return res.json({ state: getState() })
   })
   .post('/build-road', (req, res) => {
     const playerId = Number(req.body?.playerId)
-    const player = players.find((entry) => entry.id === playerId)
+    const resolved = resolvePlayer(playerId, req.body?.playerName)
 
-    if (!player) {
+    if (!resolved) {
       return res.status(404).json({ error: 'Player not found.' })
     }
+
+    const { player, displayName } = resolved
 
     if (player.roads <= 0) {
       return res.status(400).json({ error: 'You do not have any roads left.' })
     }
 
     player.roads -= 1
-    addEvent(`${player.name} placed a road.`)
+    addEvent(`${displayName} placed a road.`)
     broadcastState()
 
     return res.json({ state: getState() })
   })
   .post('/build-settlement', (req, res) => {
     const playerId = Number(req.body?.playerId)
-    const player = players.find((entry) => entry.id === playerId)
+    const resolved = resolvePlayer(playerId, req.body?.playerName)
 
-    if (!player) {
+    if (!resolved) {
       return res.status(404).json({ error: 'Player not found.' })
     }
+
+    const { player, displayName } = resolved
 
     if (player.settlements <= 0) {
       return res.status(400).json({ error: 'You do not have any settlements left.' })
     }
 
     player.settlements -= 1
-    addEvent(`${player.name} placed a settlement.`)
+    addEvent(`${displayName} placed a settlement.`)
     broadcastState()
 
     return res.json({ state: getState() })
   })
   .post('/build-city', (req, res) => {
     const playerId = Number(req.body?.playerId)
-    const player = players.find((entry) => entry.id === playerId)
+    const resolved = resolvePlayer(playerId, req.body?.playerName)
 
-    if (!player) {
+    if (!resolved) {
       return res.status(404).json({ error: 'Player not found.' })
     }
+
+    const { player, displayName } = resolved
 
     if (player.cities <= 0) {
       return res.status(400).json({ error: 'You do not have any cities left.' })
     }
 
     player.cities -= 1
-    addEvent(`${player.name} placed a city.`)
+    addEvent(`${displayName} placed a city.`)
     broadcastState()
 
     return res.json({ state: getState() })
   })
   .post('/random-tile', (req, res) => {
     const playerId = Number(req.body?.playerId)
-    const player = players.find((entry) => entry.id === playerId)
+    const resolved = resolvePlayer(playerId, req.body?.playerName)
 
-    if (!player) {
+    if (!resolved) {
       return res.status(404).json({ error: 'Player not found.' })
     }
+
+    const { displayName } = resolved
 
     if (!setupMode) {
       return res.status(400).json({ error: 'Setup mode is disabled.' })
@@ -235,25 +260,27 @@ app
     const resource = resourceTypes[Math.floor(Math.random() * resourceTypes.length)]
     boardResource = resource.name
     boardPip = boardPip || null
-    addEvent(`${player.name} randomized the tile to ${resource.name}.`)
+    addEvent(`${displayName} randomized the tile to ${resource.name}.`)
     broadcastState()
 
     return res.json({ state: getState() })
   })
   .post('/random-pips', (req, res) => {
     const playerId = Number(req.body?.playerId)
-    const player = players.find((entry) => entry.id === playerId)
+    const resolved = resolvePlayer(playerId, req.body?.playerName)
 
-    if (!player) {
+    if (!resolved) {
       return res.status(404).json({ error: 'Player not found.' })
     }
+
+    const { displayName } = resolved
 
     if (!setupMode) {
       return res.status(400).json({ error: 'Setup mode is disabled.' })
     }
 
     boardPip = dicePool[Math.floor(Math.random() * dicePool.length)]
-    addEvent(`${player.name} randomized the pip value to ${boardPip}.`)
+    addEvent(`${displayName} randomized the pip value to ${boardPip}.`)
     broadcastState()
 
     return res.json({ state: getState() })

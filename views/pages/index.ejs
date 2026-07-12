@@ -389,10 +389,9 @@
         body: JSON.stringify(body)
       })
 
-      const data = await response.json()
-      if (data.error) {
-        alert(data.error)
-        return null
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        return data
       }
 
       return data
@@ -416,7 +415,30 @@
         currentPlayerName = data.name
         state = data.state
         render()
+        return true
       }
+
+      return false
+    }
+
+    async function ensurePlayerSession(savedPlayer) {
+      if (savedPlayer) {
+        const resumed = await resumePlayer(savedPlayer.playerId, savedPlayer.name)
+        if (resumed) {
+          return true
+        }
+      }
+
+      clearPlayerIdentity()
+
+      const enteredName = window.prompt('Enter your player name', '')
+      if (enteredName && enteredName.trim()) {
+        await joinPlayer(enteredName.trim())
+        return true
+      }
+
+      render()
+      return false
     }
 
     countButton.addEventListener('click', async () => {
@@ -424,7 +446,7 @@
         return
       }
 
-      const data = await requestJson('/count', { playerId: currentPlayerId })
+      const data = await requestJson('/count', { playerId: currentPlayerId, playerName: currentPlayerName })
       if (data) {
         state = data.state
         render()
@@ -436,7 +458,7 @@
         return
       }
 
-      const data = await requestJson('/roll-dice', { playerId: currentPlayerId })
+      const data = await requestJson('/roll-dice', { playerId: currentPlayerId, playerName: currentPlayerName })
       if (data) {
         state = data.state
         render()
@@ -448,7 +470,7 @@
         return
       }
 
-      const data = await requestJson('/random-tile', { playerId: currentPlayerId })
+      const data = await requestJson('/random-tile', { playerId: currentPlayerId, playerName: currentPlayerName })
       if (data) {
         state = data.state
         render()
@@ -460,7 +482,7 @@
         return
       }
 
-      const data = await requestJson('/random-pips', { playerId: currentPlayerId })
+      const data = await requestJson('/random-pips', { playerId: currentPlayerId, playerName: currentPlayerName })
       if (data) {
         state = data.state
         render()
@@ -472,7 +494,7 @@
         return
       }
 
-      const data = await requestJson('/build-road', { playerId: currentPlayerId })
+      const data = await requestJson('/build-road', { playerId: currentPlayerId, playerName: currentPlayerName })
       if (data) {
         state = data.state
         render()
@@ -484,7 +506,7 @@
         return
       }
 
-      const data = await requestJson('/build-settlement', { playerId: currentPlayerId })
+      const data = await requestJson('/build-settlement', { playerId: currentPlayerId, playerName: currentPlayerName })
       if (data) {
         state = data.state
         render()
@@ -496,7 +518,7 @@
         return
       }
 
-      const data = await requestJson('/build-city', { playerId: currentPlayerId })
+      const data = await requestJson('/build-city', { playerId: currentPlayerId, playerName: currentPlayerName })
       if (data) {
         state = data.state
         render()
@@ -537,17 +559,7 @@
 
     window.addEventListener('load', async () => {
       const savedPlayer = loadPlayerIdentity()
-      if (savedPlayer) {
-        await resumePlayer(savedPlayer.playerId, savedPlayer.name)
-        return
-      }
-
-      const enteredName = window.prompt('Enter your player name', '')
-      if (enteredName && enteredName.trim()) {
-        await joinPlayer(enteredName.trim())
-      } else {
-        render()
-      }
+      await ensurePlayerSession(savedPlayer)
     })
 
     render()
