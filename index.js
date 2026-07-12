@@ -15,6 +15,28 @@ const resourceTypes = [
   { name: 'Wood', color: '#15803d' },
   { name: 'Brick', color: '#b45309' }
 ]
+const developmentCardTypes = [
+  { key: 'knights', name: 'Knight' },
+  { key: 'victoryPoints', name: 'Victory Point' },
+  { key: 'monopoly', name: 'Monopoly' },
+  { key: 'roadBuilding', name: 'Road Building' },
+  { key: 'yearOfPlenty', name: 'Year of Plenty' }
+]
+const bankResources = {
+  Sheep: 19,
+  Wheat: 19,
+  Ore: 19,
+  Wood: 19,
+  Brick: 19
+}
+const bankDevelopmentCards = {
+  knights: 14,
+  victoryPoints: 5,
+  monopoly: 2,
+  roadBuilding: 2,
+  yearOfPlenty: 2
+}
+const history = []
 
 let nextPlayerId = 1
 let lastRoll = null
@@ -27,6 +49,33 @@ function addEvent(message) {
   eventLog.push(message)
   if (eventLog.length > 30) {
     eventLog.shift()
+  }
+}
+
+function createPlayer(name, id) {
+  return {
+    id,
+    name,
+    color: colors[players.length],
+    count: 0,
+    rolls: 0,
+    settlements: 5,
+    roads: 15,
+    cities: 4,
+    resources: {
+      Sheep: 0,
+      Wheat: 0,
+      Ore: 0,
+      Wood: 0,
+      Brick: 0
+    },
+    developmentCards: {
+      knights: 0,
+      victoryPoints: 0,
+      monopoly: 0,
+      roadBuilding: 0,
+      yearOfPlenty: 0
+    }
   }
 }
 
@@ -45,6 +94,46 @@ function resolvePlayer(playerId, providedName) {
   }
 }
 
+function captureSnapshot() {
+  return {
+    players: players.map((player) => ({
+      ...player,
+      resources: { ...player.resources },
+      developmentCards: { ...player.developmentCards }
+    })),
+    eventLog: eventLog.slice(),
+    nextPlayerId,
+    lastRoll,
+    lastRollBy,
+    setupMode,
+    boardResource,
+    boardPip,
+    bankResources: { ...bankResources },
+    bankDevelopmentCards: { ...bankDevelopmentCards }
+  }
+}
+
+function restoreSnapshot(snapshot) {
+  players.splice(0, players.length, ...snapshot.players.map((player) => ({
+    ...player,
+    resources: { ...player.resources },
+    developmentCards: { ...player.developmentCards }
+  })))
+  eventLog.splice(0, eventLog.length, ...snapshot.eventLog)
+  nextPlayerId = snapshot.nextPlayerId
+  lastRoll = snapshot.lastRoll
+  lastRollBy = snapshot.lastRollBy
+  setupMode = snapshot.setupMode
+  boardResource = snapshot.boardResource
+  boardPip = snapshot.boardPip
+  Object.keys(bankResources).forEach((resource) => {
+    bankResources[resource] = snapshot.bankResources[resource]
+  })
+  Object.keys(bankDevelopmentCards).forEach((cardKey) => {
+    bankDevelopmentCards[cardKey] = snapshot.bankDevelopmentCards[cardKey]
+  })
+}
+
 function resetGameState() {
   players.splice(0, players.length)
   eventLog.splice(0, eventLog.length)
@@ -54,6 +143,12 @@ function resetGameState() {
   boardResource = null
   boardPip = null
   nextPlayerId = 1
+  Object.keys(bankResources).forEach((resource) => {
+    bankResources[resource] = 19
+  })
+  Object.keys(bankDevelopmentCards).forEach((cardKey) => {
+    bankDevelopmentCards[cardKey] = cardKey === 'knights' ? 14 : cardKey === 'victoryPoints' ? 5 : 2
+  })
 }
 
 function getState() {
@@ -66,7 +161,9 @@ function getState() {
       rolls: player.rolls,
       settlements: player.settlements,
       roads: player.roads,
-      cities: player.cities
+      cities: player.cities,
+      resources: { ...player.resources },
+      developmentCards: { ...player.developmentCards }
     })),
     maxPlayers: 4,
     eventLog: eventLog.slice(-30),
@@ -75,6 +172,10 @@ function getState() {
     setupMode,
     boardResource,
     boardPip,
+    bank: {
+      resources: { ...bankResources },
+      developmentCards: { ...bankDevelopmentCards }
+    },
     reset: false
   }
 }
@@ -84,6 +185,24 @@ function broadcastState() {
   for (const client of clients) {
     client.write(`event: state\ndata: ${payload}\n\n`)
   }
+}
+
+function pushHistory(actionDescription, actorName) {
+  history.push({
+    description: actionDescription,
+    actorName,
+    snapshot: captureSnapshot()
+  })
+}
+
+function chooseDevelopmentCard() {
+  const available = developmentCardTypes.filter((card) => bankDevelopmentCards[card.key] > 0)
+  if (!available.length) {
+    return null
+  }
+
+  const selected = available[Math.floor(Math.random() * available.length)]
+  return selected.key
 }
 
 app
@@ -120,17 +239,8 @@ app
       return res.status(409).json({ error: 'The game already has 4 players.' })
     }
 
-    const player = {
-      id: nextPlayerId++,
-      name,
-      color: colors[players.length],
-      count: 0,
-      rolls: 0,
-      settlements: 5,
-      roads: 15,
-      cities: 4
-    }
-
+    const player = createPlayer(name, nextPlayerId++)
+    pushHistory(`${player.name} joined the game.`, player.name)
     players.push(player)
     addEvent(`${player.name} joined the game.`)
     broadcastState()
@@ -162,6 +272,7 @@ app
     }
 
     const { player, displayName } = resolved
+    pushHistory(`${displayName} pressed Count.`, displayName)
     player.count += 1
     addEvent(`${displayName} pressed Count.`)
     broadcastState()
@@ -177,6 +288,7 @@ app
     }
 
     const { player, displayName } = resolved
+    pushHistory(`${displayName} rolled a die.`, displayName)
     const roll = dicePool[Math.floor(Math.random() * dicePool.length)]
     player.rolls += 1
     lastRoll = roll
@@ -200,6 +312,7 @@ app
       return res.status(400).json({ error: 'You do not have any roads left.' })
     }
 
+    pushHistory(`${displayName} placed a road.`, displayName)
     player.roads -= 1
     addEvent(`${displayName} placed a road.`)
     broadcastState()
@@ -220,6 +333,7 @@ app
       return res.status(400).json({ error: 'You do not have any settlements left.' })
     }
 
+    pushHistory(`${displayName} placed a settlement.`, displayName)
     player.settlements -= 1
     addEvent(`${displayName} placed a settlement.`)
     broadcastState()
@@ -240,8 +354,93 @@ app
       return res.status(400).json({ error: 'You do not have any cities left.' })
     }
 
+    pushHistory(`${displayName} placed a city.`, displayName)
     player.cities -= 1
     addEvent(`${displayName} placed a city.`)
+    broadcastState()
+
+    return res.json({ state: getState() })
+  })
+  .post('/take-resource', (req, res) => {
+    const playerId = Number(req.body?.playerId)
+    const resolved = resolvePlayer(playerId, req.body?.playerName)
+    const resource = req.body?.resource
+
+    if (!resolved) {
+      return res.status(404).json({ error: 'Player not found.' })
+    }
+
+    if (!resource || !bankResources[resource]) {
+      return res.status(400).json({ error: 'That resource is not available.' })
+    }
+
+    const { player, displayName } = resolved
+    if (bankResources[resource] <= 0) {
+      return res.status(400).json({ error: 'The bank is out of that resource.' })
+    }
+
+    pushHistory(`${displayName} took 1 ${resource} from the bank.`, displayName)
+    bankResources[resource] -= 1
+    player.resources[resource] += 1
+    addEvent(`${displayName} took 1 ${resource} from the bank.`)
+    broadcastState()
+
+    return res.json({ state: getState() })
+  })
+  .post('/return-resource', (req, res) => {
+    const playerId = Number(req.body?.playerId)
+    const resolved = resolvePlayer(playerId, req.body?.playerName)
+    const resource = req.body?.resource
+
+    if (!resolved) {
+      return res.status(404).json({ error: 'Player not found.' })
+    }
+
+    if (!resource || !bankResources[resource]) {
+      return res.status(400).json({ error: 'That resource is not available.' })
+    }
+
+    const { player, displayName } = resolved
+    if ((player.resources[resource] || 0) <= 0) {
+      return res.status(400).json({ error: 'You do not have that resource to return.' })
+    }
+
+    if (bankResources[resource] >= 19) {
+      return res.status(400).json({ error: 'The bank already has the maximum of that resource.' })
+    }
+
+    pushHistory(`${displayName} returned 1 ${resource} to the bank.`, displayName)
+    player.resources[resource] -= 1
+    bankResources[resource] += 1
+    addEvent(`${displayName} returned 1 ${resource} to the bank.`)
+    broadcastState()
+
+    return res.json({ state: getState() })
+  })
+  .post('/take-development-card', (req, res) => {
+    const playerId = Number(req.body?.playerId)
+    const resolved = resolvePlayer(playerId, req.body?.playerName)
+
+    if (!resolved) {
+      return res.status(404).json({ error: 'Player not found.' })
+    }
+
+    if (setupMode) {
+      return res.status(400).json({ error: 'Development cards are only available when setup mode is off.' })
+    }
+
+    const { player, displayName } = resolved
+    const cardKey = chooseDevelopmentCard()
+
+    if (!cardKey) {
+      return res.status(400).json({ error: 'The bank is out of development cards.' })
+    }
+
+    const card = developmentCardTypes.find((entry) => entry.key === cardKey)
+    pushHistory(`${displayName} took a development card.`, displayName)
+    bankDevelopmentCards[cardKey] -= 1
+    player.developmentCards[cardKey] += 1
+    addEvent(`${displayName} took a ${card?.name || cardKey} development card.`)
     broadcastState()
 
     return res.json({ state: getState() })
@@ -261,6 +460,7 @@ app
     }
 
     const resource = resourceTypes[Math.floor(Math.random() * resourceTypes.length)]
+    pushHistory(`${displayName} randomized the tile.`, displayName)
     boardResource = resource.name
     boardPip = boardPip || null
     addEvent(`${displayName} randomized the tile to ${resource.name}.`)
@@ -282,6 +482,7 @@ app
       return res.status(400).json({ error: 'Setup mode is disabled.' })
     }
 
+    pushHistory(`${displayName} randomized the pip value.`, displayName)
     boardPip = dicePool[Math.floor(Math.random() * dicePool.length)]
     addEvent(`${displayName} randomized the pip value to ${boardPip}.`)
     broadcastState()
@@ -293,8 +494,25 @@ app
     const resolved = resolvePlayer(playerId, req.body?.playerName)
     const actorName = resolved?.displayName || req.body?.playerName || 'A player'
 
+    pushHistory(`${actorName} toggled setup mode.`, actorName)
     setupMode = Boolean(req.body?.enabled)
     addEvent(`${actorName} ${setupMode ? 'enabled' : 'disabled'} setup mode.`)
+    broadcastState()
+
+    return res.json({ state: getState() })
+  })
+  .post('/undo', (req, res) => {
+    const playerId = Number(req.body?.playerId)
+    const resolved = resolvePlayer(playerId, req.body?.playerName)
+    const actorName = resolved?.displayName || req.body?.playerName || 'A player'
+
+    if (!history.length) {
+      return res.status(400).json({ error: 'There is nothing to undo.' })
+    }
+
+    const previous = history.pop()
+    restoreSnapshot(previous.snapshot)
+    addEvent(`${actorName} undid ${previous.description}.`)
     broadcastState()
 
     return res.json({ state: getState() })
@@ -304,6 +522,7 @@ app
     const resolved = resolvePlayer(playerId, req.body?.playerName)
     const actorName = resolved?.displayName || req.body?.playerName || 'A player'
 
+    pushHistory(`${actorName} flipped the board and reset the game.`, actorName)
     resetGameState()
     addEvent(`${actorName} flipped the board and reset the game.`)
     broadcastState()

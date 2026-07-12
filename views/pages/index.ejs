@@ -7,13 +7,12 @@
       margin: 0;
       font-family: 'Segoe UI', sans-serif;
       background: #f3f6fb;
-      padding-top: 64px;
-      padding-bottom: 72px;
       color: #111827;
+      padding: 0;
     }
 
     .top-bar {
-      position: fixed;
+      position: sticky;
       top: 0;
       left: 0;
       right: 0;
@@ -55,7 +54,7 @@
     }
 
     .bottom-bar {
-      position: fixed;
+      position: sticky;
       bottom: 0;
       left: 0;
       right: 0;
@@ -81,7 +80,7 @@
 
     .layout {
       display: grid;
-      grid-template-columns: 250px minmax(0, 1fr) 300px;
+      grid-template-columns: 270px minmax(0, 1fr) 320px;
       gap: 20px;
       padding: 20px;
     }
@@ -105,6 +104,23 @@
       align-items: center;
       justify-content: flex-start;
       padding: 20px;
+      gap: 12px;
+    }
+
+    .bank-panel {
+      width: 100%;
+      max-width: 480px;
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+    }
+
+    .bank-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
     }
 
     .hexagon {
@@ -119,7 +135,6 @@
       font-size: 1.1rem;
       font-weight: 700;
       color: #1f2937;
-      margin-top: 12px;
       box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.08);
       text-align: center;
       padding: 10px;
@@ -138,6 +153,20 @@
       padding: 8px 10px;
       background: #f8fafc;
       border-radius: 8px;
+      border: none;
+      width: 100%;
+      text-align: left;
+      align-items: center;
+    }
+
+    .resource-item:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .resource-item:hover:not(:disabled) {
+      background: #eef2ff;
+      cursor: pointer;
     }
 
     .event-log-box {
@@ -176,6 +205,7 @@
       padding: 8px 10px;
       background: #f8fafc;
       border-radius: 8px;
+      align-items: center;
     }
 
     .player-metrics {
@@ -213,11 +243,6 @@
     }
 
     @media (max-width: 640px) {
-      body {
-        padding-top: 96px;
-        padding-bottom: 116px;
-      }
-
       .top-bar {
         padding: 12px 14px;
       }
@@ -235,9 +260,18 @@
         width: 100%;
       }
 
+      .layout {
+        padding: 14px;
+        gap: 14px;
+      }
+
       .hexagon {
         width: 150px;
         height: 150px;
+      }
+
+      .bank-grid {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -250,6 +284,7 @@
       <label class="status-toggle">
         <input id="setupToggle" type="checkbox"> <span>Setup game</span>
       </label>
+      <button id="undoButton" class="btn btn-outline-light btn-sm" disabled>Undo</button>
       <button id="flipButton" class="btn btn-light btn-sm">Flip the board</button>
     </div>
   </div>
@@ -261,11 +296,10 @@
         <div class="resource-item"><span>Settlements</span><strong id="settlementCount">5</strong></div>
         <div class="resource-item"><span>Roads</span><strong id="roadCount">15</strong></div>
         <div class="resource-item"><span>Cities</span><strong id="cityCount">4</strong></div>
-        <div class="resource-item"><span style="color:#ca8a04;">Wheat</span><strong id="wheatCount">0</strong></div>
-        <div class="resource-item"><span style="color:#86efac;">Sheep</span><strong id="sheepCount">0</strong></div>
-        <div class="resource-item"><span style="color:#9ca3af;">Ore</span><strong id="oreCount">0</strong></div>
-        <div class="resource-item"><span style="color:#15803d;">Wood</span><strong id="woodCount">0</strong></div>
-        <div class="resource-item"><span style="color:#b45309;">Brick</span><strong id="brickCount">0</strong></div>
+      </div>
+      <div id="playerResources" class="resource-list"></div>
+      <div class="resource-list">
+        <div class="resource-item"><span>Dev. Cards</span><strong id="developmentCardCount">0</strong></div>
       </div>
     </aside>
 
@@ -273,6 +307,10 @@
       <h3>Board</h3>
       <div id="rollDisplay" class="mb-2"><strong>Last roll:</strong> None</div>
       <div id="hexagon" class="hexagon"><span id="hexagonText">Hexagon</span><span id="hexagonPip">-</span></div>
+      <div class="bank-panel">
+        <h4>Bank</h4>
+        <div id="bankResources" class="bank-grid"></div>
+      </div>
     </main>
 
     <aside class="panel">
@@ -310,11 +348,9 @@
     const settlementCount = document.getElementById('settlementCount')
     const roadCount = document.getElementById('roadCount')
     const cityCount = document.getElementById('cityCount')
-    const wheatCount = document.getElementById('wheatCount')
-    const sheepCount = document.getElementById('sheepCount')
-    const oreCount = document.getElementById('oreCount')
-    const woodCount = document.getElementById('woodCount')
-    const brickCount = document.getElementById('brickCount')
+    const developmentCardCount = document.getElementById('developmentCardCount')
+    const playerResources = document.getElementById('playerResources')
+    const bankResources = document.getElementById('bankResources')
     const playerList = document.getElementById('playerList')
     const eventList = document.getElementById('eventList')
     const rollDisplay = document.getElementById('rollDisplay')
@@ -326,6 +362,7 @@
     const settlementButton = document.getElementById('settlementButton')
     const cityButton = document.getElementById('cityButton')
     const setupToggle = document.getElementById('setupToggle')
+    const undoButton = document.getElementById('undoButton')
     const flipButton = document.getElementById('flipButton')
     const hexagon = document.getElementById('hexagon')
     const hexagonText = document.getElementById('hexagonText')
@@ -349,8 +386,15 @@
       currentPlayerName = ''
     }
 
+    function getDevelopmentCardTotal(player) {
+      return Object.values(player?.developmentCards || {}).reduce((total, value) => total + Number(value || 0), 0)
+    }
+
     function render() {
       const currentPlayer = getCurrentPlayer()
+      const bank = state.bank || { resources: {}, developmentCards: {} }
+      const playerResourcesForHand = currentPlayer?.resources || {}
+      const devCardTotal = getDevelopmentCardTotal(currentPlayer)
 
       playerNameBar.textContent = currentPlayer
         ? `Your name: ${currentPlayerName}`
@@ -366,11 +410,58 @@
         cityCount.textContent = '4'
       }
 
-      wheatCount.textContent = '0'
-      sheepCount.textContent = '0'
-      oreCount.textContent = '0'
-      woodCount.textContent = '0'
-      brickCount.textContent = '0'
+      developmentCardCount.textContent = devCardTotal
+
+      playerResources.innerHTML = ''
+      ;['Wheat', 'Sheep', 'Ore', 'Wood', 'Brick'].forEach((resource) => {
+        const count = currentPlayer ? (playerResourcesForHand[resource] || 0) : 0
+        const button = document.createElement('button')
+        button.type = 'button'
+        button.className = 'resource-item'
+        button.innerHTML = `<span style="color:${resourceColors[resource]}; font-weight:700;">${resource}</span><strong>${count}</strong>`
+        button.disabled = !currentPlayer || count <= 0
+        button.title = count > 0 ? `Return 1 ${resource} to the bank` : `No ${resource}`
+        button.addEventListener('click', () => {
+          if (!currentPlayer) {
+            return
+          }
+          handleReturnResource(resource)
+        })
+        playerResources.appendChild(button)
+      })
+
+      bankResources.innerHTML = ''
+      ;['Wheat', 'Sheep', 'Ore', 'Wood', 'Brick'].forEach((resource) => {
+        const count = bank.resources?.[resource] || 0
+        const button = document.createElement('button')
+        button.type = 'button'
+        button.className = 'resource-item'
+        button.innerHTML = `<span style="color:${resourceColors[resource]}; font-weight:700;">${resource}</span><strong>${count}</strong>`
+        button.disabled = !currentPlayer || count <= 0
+        button.title = count > 0 ? `Take 1 ${resource} from the bank` : `No ${resource}`
+        button.addEventListener('click', () => {
+          if (!currentPlayer) {
+            return
+          }
+          handleTakeResource(resource)
+        })
+        bankResources.appendChild(button)
+      })
+
+      const devButton = document.createElement('button')
+      devButton.type = 'button'
+      devButton.className = 'resource-item'
+      const devCount = Object.values(bank.developmentCards || {}).reduce((sum, value) => sum + Number(value || 0), 0)
+      devButton.innerHTML = '<span style="font-weight:700;">Dev. Card</span><strong>' + devCount + '</strong>'
+      devButton.disabled = !currentPlayer || devCount <= 0 || Boolean(state.setupMode)
+      devButton.title = state.setupMode ? 'Development cards are only available when setup mode is off' : 'Take a development card from the bank'
+      devButton.addEventListener('click', () => {
+        if (!currentPlayer) {
+          return
+        }
+        handleTakeDevelopmentCard()
+      })
+      bankResources.appendChild(devButton)
 
       playerList.innerHTML = ''
       for (let index = 0; index < 4; index += 1) {
@@ -378,15 +469,19 @@
         const slot = player || {
           name: `Player ${index + 1}`,
           color: '#6b7280',
-          count: 0
+          count: 0,
+          rolls: 0,
+          resources: {}
         }
         const item = document.createElement('div')
         item.className = 'player-entry'
+        const resourceTotal = Object.values(slot.resources || {}).reduce((sum, value) => sum + Number(value || 0), 0)
+        const devTotal = getDevelopmentCardTotal(slot)
         item.innerHTML = `
           <span style="color:${slot.color}; font-weight:700;">${slot.name}</span>
           <div class="player-metrics">
-            <span class="badge-pill" title="Count actions">${slot.count || 0}</span>
-            <span class="badge-pill badge-pill-green" title="Dice rolls">${slot.rolls || 0}</span>
+            <span class="badge-pill" title="Resource cards">${resourceTotal}</span>
+            <span class="badge-pill badge-pill-green" title="Development cards">${devTotal}</span>
           </div>
         `
         playerList.appendChild(item)
@@ -427,6 +522,7 @@
       roadButton.disabled = !controlsEnabled || state.setupMode
       settlementButton.disabled = !controlsEnabled || state.setupMode
       cityButton.disabled = !controlsEnabled || state.setupMode
+      undoButton.disabled = !controlsEnabled
     }
 
     function savePlayerIdentity(playerId, name) {
@@ -459,8 +555,9 @@
       })
 
       const data = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        return data
+      if (!response.ok && data.error) {
+        alert(data.error)
+        return null
       }
 
       return data
@@ -508,6 +605,30 @@
 
       render()
       return false
+    }
+
+    async function handleTakeResource(resource) {
+      const data = await requestJson('/take-resource', { playerId: currentPlayerId, playerName: currentPlayerName, resource })
+      if (data) {
+        state = data.state
+        render()
+      }
+    }
+
+    async function handleReturnResource(resource) {
+      const data = await requestJson('/return-resource', { playerId: currentPlayerId, playerName: currentPlayerName, resource })
+      if (data) {
+        state = data.state
+        render()
+      }
+    }
+
+    async function handleTakeDevelopmentCard() {
+      const data = await requestJson('/take-development-card', { playerId: currentPlayerId, playerName: currentPlayerName })
+      if (data) {
+        state = data.state
+        render()
+      }
     }
 
     countButton.addEventListener('click', async () => {
@@ -600,6 +721,18 @@
         playerId: currentPlayerId,
         playerName: currentPlayerName
       })
+      if (data) {
+        state = data.state
+        render()
+      }
+    })
+
+    undoButton.addEventListener('click', async () => {
+      if (!currentPlayerId) {
+        return
+      }
+
+      const data = await requestJson('/undo', { playerId: currentPlayerId, playerName: currentPlayerName })
       if (data) {
         state = data.state
         render()
