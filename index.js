@@ -19,7 +19,7 @@ const resourceTypes = [
 let nextPlayerId = 1
 let lastRoll = null
 let lastRollBy = null
-let setupMode = false
+let setupMode = true
 let boardResource = null
 let boardPip = null
 
@@ -50,7 +50,7 @@ function resetGameState() {
   eventLog.splice(0, eventLog.length)
   lastRoll = null
   lastRollBy = null
-  setupMode = false
+  setupMode = true
   boardResource = null
   boardPip = null
   nextPlayerId = 1
@@ -63,6 +63,7 @@ function getState() {
       name: player.name,
       color: player.color,
       count: player.count,
+      rolls: player.rolls,
       settlements: player.settlements,
       roads: player.roads,
       cities: player.cities
@@ -124,6 +125,7 @@ app
       name,
       color: colors[players.length],
       count: 0,
+      rolls: 0,
       settlements: 5,
       roads: 15,
       cities: 4
@@ -176,6 +178,7 @@ app
 
     const { player, displayName } = resolved
     const roll = dicePool[Math.floor(Math.random() * dicePool.length)]
+    player.rolls += 1
     lastRoll = roll
     lastRollBy = displayName
     addEvent(`${displayName} rolled a ${roll}.`)
@@ -286,15 +289,23 @@ app
     return res.json({ state: getState() })
   })
   .post('/toggle-setup', (req, res) => {
+    const playerId = Number(req.body?.playerId)
+    const resolved = resolvePlayer(playerId, req.body?.playerName)
+    const actorName = resolved?.displayName || req.body?.playerName || 'A player'
+
     setupMode = Boolean(req.body?.enabled)
-    addEvent(setupMode ? 'Setup mode enabled.' : 'Setup mode disabled.')
+    addEvent(`${actorName} ${setupMode ? 'enabled' : 'disabled'} setup mode.`)
     broadcastState()
 
     return res.json({ state: getState() })
   })
   .post('/reset-game', (req, res) => {
+    const playerId = Number(req.body?.playerId)
+    const resolved = resolvePlayer(playerId, req.body?.playerName)
+    const actorName = resolved?.displayName || req.body?.playerName || 'A player'
+
     resetGameState()
-    addEvent('The board was flipped and the game was reset.')
+    addEvent(`${actorName} flipped the board and reset the game.`)
     broadcastState()
 
     return res.json({ state: getState(), reset: true })
