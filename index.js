@@ -94,6 +94,22 @@ app
 
     return res.json({ playerId: player.id, name: player.name, state: getState() })
   })
+  .post('/resume', (req, res) => {
+    const playerId = Number(req.body?.playerId)
+    const name = (req.body?.name || '').trim()
+
+    if (!playerId || !name) {
+      return res.status(400).json({ error: 'A player identity is required.' })
+    }
+
+    const player = players.find((entry) => entry.id === playerId && entry.name === name)
+
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found.' })
+    }
+
+    return res.json({ playerId: player.id, name: player.name, state: getState() })
+  })
   .post('/count', (req, res) => {
     const playerId = Number(req.body?.playerId)
     const player = players.find((entry) => entry.id === playerId)

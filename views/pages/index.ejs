@@ -202,6 +202,7 @@
   <script src="https://cdn.jsdelivr.net/npm/popper.js@1.14.7/dist/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
   <script>
     const initialState = <%- JSON.stringify(initialState) %>
+    const STORAGE_KEY = 'catanlive_player'
     let currentPlayerId = null
     let currentPlayerName = ''
     let state = initialState
@@ -295,8 +296,41 @@
       return data
     }
 
+    function savePlayerIdentity(playerId, name) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ playerId, name }))
+    }
+
+    function loadPlayerIdentity() {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (!stored) {
+        return null
+      }
+
+      try {
+        const parsed = JSON.parse(stored)
+        if (parsed && parsed.playerId && parsed.name) {
+          return parsed
+        }
+      } catch (error) {
+        console.error(error)
+      }
+
+      return null
+    }
+
     async function joinPlayer(name) {
       const data = await requestJson('/join', { name })
+      if (data && data.playerId) {
+        currentPlayerId = data.playerId
+        currentPlayerName = data.name
+        state = data.state
+        savePlayerIdentity(currentPlayerId, currentPlayerName)
+        render()
+      }
+    }
+
+    async function resumePlayer(playerId, name) {
+      const data = await requestJson('/resume', { playerId, name })
       if (data && data.playerId) {
         currentPlayerId = data.playerId
         currentPlayerName = data.name
@@ -371,10 +405,16 @@
       render()
     })
 
-    window.addEventListener('load', () => {
+    window.addEventListener('load', async () => {
+      const savedPlayer = loadPlayerIdentity()
+      if (savedPlayer) {
+        await resumePlayer(savedPlayer.playerId, savedPlayer.name)
+        return
+      }
+
       const enteredName = window.prompt('Enter your player name', '')
       if (enteredName && enteredName.trim()) {
-        joinPlayer(enteredName.trim())
+        await joinPlayer(enteredName.trim())
       } else {
         render()
       }
