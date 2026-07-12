@@ -879,16 +879,23 @@
     })
 
     setupToggle.addEventListener('change', async () => {
-      await runAction(async () => {
-        const data = await requestJson('/toggle-setup', {
-          enabled: setupToggle.checked,
-          playerId: currentPlayerId,
-          playerName: currentPlayerName
-        })
-        if (data) {
-          state = data.state
-        }
+      const nextMode = setupToggle.checked
+      state.setupMode = nextMode
+      render()
+
+      const data = await requestJson('/toggle-setup', {
+        enabled: nextMode,
+        playerId: currentPlayerId,
+        playerName: currentPlayerName
       })
+
+      if (data) {
+        state = data.state
+      } else {
+        state.setupMode = !nextMode
+      }
+
+      render()
     })
 
     undoButton.addEventListener('click', async () => {
