@@ -5,16 +5,35 @@ const PORT = process.env.PORT || 5001
 const app = express()
 const clients = new Set()
 const players = []
+const colors = ['#2563eb', '#16a34a', '#ea580c', '#dc2626']
+const dicePool = [2, 3, 3, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8, 9, 9, 9, 9, 10, 10, 10, 11, 11, 12]
+const eventLog = []
 let nextPlayerId = 1
+let lastRoll = null
+let lastRollBy = null
+
+function addEvent(message) {
+  eventLog.push(message)
+  if (eventLog.length > 12) {
+    eventLog.shift()
+  }
+}
 
 function getState() {
   return {
     players: players.slice(0, 4).map((player) => ({
       id: player.id,
       name: player.name,
-      count: player.count
+      color: player.color,
+      count: player.count,
+      settlements: player.settlements,
+      roads: player.roads,
+      cities: player.cities
     })),
-    maxPlayers: 4
+    maxPlayers: 4,
+    eventLog: eventLog.slice(-12),
+    lastRoll,
+    lastRollBy
   }
 }
 
@@ -62,10 +81,15 @@ app
     const player = {
       id: nextPlayerId++,
       name,
-      count: 0
+      color: colors[players.length],
+      count: 0,
+      settlements: 5,
+      roads: 15,
+      cities: 4
     }
 
     players.push(player)
+    addEvent(`${player.name} joined the game.`)
     broadcastState()
 
     return res.json({ playerId: player.id, name: player.name, state: getState() })
@@ -79,6 +103,77 @@ app
     }
 
     player.count += 1
+    addEvent(`${player.name} pressed Count.`)
+    broadcastState()
+
+    return res.json({ state: getState() })
+  })
+  .post('/roll-dice', (req, res) => {
+    const playerId = Number(req.body?.playerId)
+    const player = players.find((entry) => entry.id === playerId)
+
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found.' })
+    }
+
+    const roll = dicePool[Math.floor(Math.random() * dicePool.length)]
+    lastRoll = roll
+    lastRollBy = player.name
+    addEvent(`${player.name} rolled a ${roll}.`)
+    broadcastState()
+
+    return res.json({ state: getState() })
+  })
+  .post('/build-road', (req, res) => {
+    const playerId = Number(req.body?.playerId)
+    const player = players.find((entry) => entry.id === playerId)
+
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found.' })
+    }
+
+    if (player.roads <= 0) {
+      return res.status(400).json({ error: 'You do not have any roads left.' })
+    }
+
+    player.roads -= 1
+    addEvent(`${player.name} placed a road.`)
+    broadcastState()
+
+    return res.json({ state: getState() })
+  })
+  .post('/build-settlement', (req, res) => {
+    const playerId = Number(req.body?.playerId)
+    const player = players.find((entry) => entry.id === playerId)
+
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found.' })
+    }
+
+    if (player.settlements <= 0) {
+      return res.status(400).json({ error: 'You do not have any settlements left.' })
+    }
+
+    player.settlements -= 1
+    addEvent(`${player.name} placed a settlement.`)
+    broadcastState()
+
+    return res.json({ state: getState() })
+  })
+  .post('/build-city', (req, res) => {
+    const playerId = Number(req.body?.playerId)
+    const player = players.find((entry) => entry.id === playerId)
+
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found.' })
+    }
+
+    if (player.cities <= 0) {
+      return res.status(400).json({ error: 'You do not have any cities left.' })
+    }
+
+    player.cities -= 1
+    addEvent(`${player.name} placed a city.`)
     broadcastState()
 
     return res.json({ state: getState() })

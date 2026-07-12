@@ -2,29 +2,200 @@
 <html>
 <head>
   <%- include ("../partials/header.ejs") %>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: #f3f6fb;
+      padding-top: 64px;
+      padding-bottom: 72px;
+      color: #111827;
+    }
+
+    .top-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 64px;
+      background: #1d4ed8;
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 20px;
+      z-index: 1000;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .bottom-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      min-height: 72px;
+      background: #111827;
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 20px;
+      z-index: 1000;
+      font-size: 0.95rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 240px minmax(0, 1fr) 240px;
+      gap: 20px;
+      padding: 20px;
+    }
+
+    .panel {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+      padding: 16px;
+    }
+
+    .panel h3, .panel h4 {
+      margin-top: 0;
+    }
+
+    .board-panel {
+      background: #87ceeb;
+      min-height: 520px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 20px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin: 16px 0;
+    }
+
+    .hexagon {
+      width: 180px;
+      height: 180px;
+      background: #f8fafc;
+      clip-path: polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #1f2937;
+      margin-top: 10px;
+      box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.08);
+    }
+
+    .resource-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .resource-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 10px;
+      background: #f8fafc;
+      border-radius: 8px;
+    }
+
+    .event-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .event-item {
+      font-size: 0.9rem;
+      padding: 8px 10px;
+      background: #f8fafc;
+      border-radius: 8px;
+    }
+
+    .player-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .player-entry {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 10px;
+      background: #f8fafc;
+      border-radius: 8px;
+    }
+
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #dbeafe;
+      color: #1d4ed8;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+  </style>
 </head>
 <body>
+  <div class="top-bar">
+    <div><strong>CatanLive</strong></div>
+    <div id="playerNameBar">Your name: Waiting for player name...</div>
+  </div>
 
-  <div class="container mt-5">
-    <div class="row justify-content-center">
-      <div class="col-md-8">
-        <div class="card text-center">
-          <div class="card-header">
-            <%= title %>
-          </div>
-          <div class="card-body">
-            <h1 class="card-title"><%= title %></h1>
-            <p class="card-text"><%= message %></p>
-            <button id="countButton" class="btn btn-primary" disabled>Count</button>
-            <p id="playerLabel" class="mt-3 mb-0">Your name: Waiting for player name...</p>
-            <div class="mt-4">
-              <h5>Player Scores</h5>
-              <ul id="playerList" class="list-group text-left"></ul>
-            </div>
-          </div>
-        </div>
+  <div class="layout">
+    <aside class="panel">
+      <h3>Player Hand</h3>
+      <div class="resource-list">
+        <div class="resource-item"><span>Settlements</span><strong id="settlementCount">5</strong></div>
+        <div class="resource-item"><span>Roads</span><strong id="roadCount">15</strong></div>
+        <div class="resource-item"><span>Cities</span><strong id="cityCount">4</strong></div>
       </div>
-    </div>
+      <div class="player-list" id="playerList"></div>
+    </aside>
+
+    <main class="panel board-panel">
+      <h3>Board</h3>
+      <div class="controls">
+        <button id="countButton" class="btn btn-primary" disabled>Count</button>
+        <button id="rollButton" class="btn btn-success" disabled>Roll Dice</button>
+        <button id="roadButton" class="btn btn-info" disabled>Place Road</button>
+        <button id="settlementButton" class="btn btn-warning" disabled>Place Settlement</button>
+        <button id="cityButton" class="btn btn-danger" disabled>Place City</button>
+      </div>
+      <div id="rollDisplay" class="mb-2"><strong>Last roll:</strong> None</div>
+      <div class="hexagon">Hexagon</div>
+    </main>
+
+    <aside class="panel">
+      <h3>Event Log</h3>
+      <ul id="eventList" class="event-list"></ul>
+    </aside>
+  </div>
+
+  <div class="bottom-bar">
+    <div><strong>End of Page</strong></div>
+    <div>About the project: This webpage is developed for non commercial use. Author: Jordan Ducatel.</div>
+    <div><strong>CatanLive</strong></div>
   </div>
 
   <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
@@ -35,66 +206,169 @@
     let currentPlayerName = ''
     let state = initialState
 
-    const button = document.getElementById('countButton')
-    const playerLabel = document.getElementById('playerLabel')
+    const playerNameBar = document.getElementById('playerNameBar')
+    const settlementCount = document.getElementById('settlementCount')
+    const roadCount = document.getElementById('roadCount')
+    const cityCount = document.getElementById('cityCount')
     const playerList = document.getElementById('playerList')
+    const eventList = document.getElementById('eventList')
+    const rollDisplay = document.getElementById('rollDisplay')
+    const countButton = document.getElementById('countButton')
+    const rollButton = document.getElementById('rollButton')
+    const roadButton = document.getElementById('roadButton')
+    const settlementButton = document.getElementById('settlementButton')
+    const cityButton = document.getElementById('cityButton')
 
-    function renderPlayers() {
-      const slots = Array.from({ length: 4 }, (_, index) => {
-        const player = state.players[index]
-        return player
-          ? { id: player.id, name: player.name, count: player.count }
-          : { name: `Player ${index + 1}`, count: 0 }
-      })
-
-      playerList.innerHTML = ''
-      slots.forEach((slot) => {
-        const item = document.createElement('li')
-        item.className = 'list-group-item d-flex justify-content-between align-items-center'
-        item.innerHTML = `<span>${slot.name}</span><span class="badge badge-primary badge-pill">${slot.count}</span>`
-        playerList.appendChild(item)
-      })
-
-      button.disabled = !currentPlayerId
-      playerLabel.innerHTML = currentPlayerId
-        ? `Your name: <strong>${currentPlayerName}</strong>`
-        : 'Your name: Waiting for player name...'
+    function getCurrentPlayer() {
+      return state.players.find((player) => player.id === currentPlayerId) || null
     }
 
-    async function joinPlayer(name) {
-      const response = await fetch('/join', {
+    function render() {
+      const currentPlayer = getCurrentPlayer()
+
+      playerNameBar.textContent = currentPlayer
+        ? `Your name: ${currentPlayerName}`
+        : 'Your name: Waiting for player name...'
+
+      if (currentPlayer) {
+        settlementCount.textContent = currentPlayer.settlements
+        roadCount.textContent = currentPlayer.roads
+        cityCount.textContent = currentPlayer.cities
+      } else {
+        settlementCount.textContent = '5'
+        roadCount.textContent = '15'
+        cityCount.textContent = '4'
+      }
+
+      playerList.innerHTML = ''
+      for (let index = 0; index < 4; index += 1) {
+        const player = state.players[index]
+        const slot = player || {
+          name: `Player ${index + 1}`,
+          color: '#6b7280',
+          count: 0
+        }
+        const item = document.createElement('div')
+        item.className = 'player-entry'
+        item.innerHTML = `
+          <span style="color:${slot.color}; font-weight:700;">${slot.name}</span>
+          <span class="badge-pill">${slot.count}</span>
+        `
+        playerList.appendChild(item)
+      }
+
+      eventList.innerHTML = ''
+      ;(state.eventLog || []).slice().reverse().forEach((entry) => {
+        const item = document.createElement('li')
+        item.className = 'event-item'
+        item.textContent = entry
+        eventList.appendChild(item)
+      })
+
+      if (state.lastRoll !== null && state.lastRollBy) {
+        rollDisplay.innerHTML = `<strong>Last roll:</strong> ${state.lastRoll} by ${state.lastRollBy}`
+      } else {
+        rollDisplay.innerHTML = '<strong>Last roll:</strong> None'
+      }
+
+      const controlsEnabled = Boolean(currentPlayer)
+      countButton.disabled = !controlsEnabled
+      rollButton.disabled = !controlsEnabled
+      roadButton.disabled = !controlsEnabled || (currentPlayer && currentPlayer.roads <= 0)
+      settlementButton.disabled = !controlsEnabled || (currentPlayer && currentPlayer.settlements <= 0)
+      cityButton.disabled = !controlsEnabled || (currentPlayer && currentPlayer.cities <= 0)
+    }
+
+    async function requestJson(url, body) {
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
+        body: JSON.stringify(body)
       })
 
       const data = await response.json()
-      if (data.playerId) {
+      if (data.error) {
+        alert(data.error)
+        return null
+      }
+
+      return data
+    }
+
+    async function joinPlayer(name) {
+      const data = await requestJson('/join', { name })
+      if (data && data.playerId) {
         currentPlayerId = data.playerId
         currentPlayerName = data.name
         state = data.state
-        renderPlayers()
-      } else {
-        alert(data.error || 'Unable to join the game.')
+        render()
       }
     }
 
-    button.addEventListener('click', async () => {
+    countButton.addEventListener('click', async () => {
       if (!currentPlayerId) {
         return
       }
 
-      await fetch('/count', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerId: currentPlayerId })
-      })
+      const data = await requestJson('/count', { playerId: currentPlayerId })
+      if (data) {
+        state = data.state
+        render()
+      }
+    })
+
+    rollButton.addEventListener('click', async () => {
+      if (!currentPlayerId) {
+        return
+      }
+
+      const data = await requestJson('/roll-dice', { playerId: currentPlayerId })
+      if (data) {
+        state = data.state
+        render()
+      }
+    })
+
+    roadButton.addEventListener('click', async () => {
+      if (!currentPlayerId) {
+        return
+      }
+
+      const data = await requestJson('/build-road', { playerId: currentPlayerId })
+      if (data) {
+        state = data.state
+        render()
+      }
+    })
+
+    settlementButton.addEventListener('click', async () => {
+      if (!currentPlayerId) {
+        return
+      }
+
+      const data = await requestJson('/build-settlement', { playerId: currentPlayerId })
+      if (data) {
+        state = data.state
+        render()
+      }
+    })
+
+    cityButton.addEventListener('click', async () => {
+      if (!currentPlayerId) {
+        return
+      }
+
+      const data = await requestJson('/build-city', { playerId: currentPlayerId })
+      if (data) {
+        state = data.state
+        render()
+      }
     })
 
     const eventSource = new EventSource('/events')
     eventSource.addEventListener('state', (event) => {
       state = JSON.parse(event.data)
-      renderPlayers()
+      render()
     })
 
     window.addEventListener('load', () => {
@@ -102,11 +376,11 @@
       if (enteredName && enteredName.trim()) {
         joinPlayer(enteredName.trim())
       } else {
-        renderPlayers()
+        render()
       }
     })
 
-    renderPlayers()
+    render()
   </script>
 </body>
 </html>
