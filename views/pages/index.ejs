@@ -26,6 +26,13 @@
       padding: 0 20px;
       z-index: 1000;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      gap: 12px;
+    }
+
+    .top-buttons {
+      display: flex;
+      gap: 8px;
+      align-items: center;
     }
 
     .bottom-bar {
@@ -42,11 +49,12 @@
       padding: 12px 20px;
       z-index: 1000;
       font-size: 0.95rem;
+      gap: 12px;
     }
 
     .layout {
       display: grid;
-      grid-template-columns: 240px minmax(0, 1fr) 240px;
+      grid-template-columns: 250px minmax(0, 1fr) 300px;
       gap: 20px;
       padding: 20px;
     }
@@ -64,7 +72,7 @@
 
     .board-panel {
       background: #87ceeb;
-      min-height: 520px;
+      min-height: 540px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -86,13 +94,16 @@
       background: #f8fafc;
       clip-path: polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%);
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      font-size: 1.2rem;
+      font-size: 1.1rem;
       font-weight: 700;
       color: #1f2937;
-      margin-top: 10px;
+      margin-top: 12px;
       box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.08);
+      text-align: center;
+      padding: 10px;
     }
 
     .resource-list {
@@ -108,6 +119,12 @@
       padding: 8px 10px;
       background: #f8fafc;
       border-radius: 8px;
+    }
+
+    .event-log-box {
+      max-height: 220px;
+      overflow-y: auto;
+      padding-right: 6px;
     }
 
     .event-list {
@@ -160,6 +177,12 @@
   <div class="top-bar">
     <div><strong>CatanLive</strong></div>
     <div id="playerNameBar">Your name: Waiting for player name...</div>
+    <div class="top-buttons">
+      <label class="mr-2">
+        <input id="setupToggle" type="checkbox"> Setup game
+      </label>
+      <button id="flipButton" class="btn btn-light btn-sm">Flip the board</button>
+    </div>
   </div>
 
   <div class="layout">
@@ -169,8 +192,12 @@
         <div class="resource-item"><span>Settlements</span><strong id="settlementCount">5</strong></div>
         <div class="resource-item"><span>Roads</span><strong id="roadCount">15</strong></div>
         <div class="resource-item"><span>Cities</span><strong id="cityCount">4</strong></div>
+        <div class="resource-item"><span style="color:#ca8a04;">Wheat</span><strong id="wheatCount">0</strong></div>
+        <div class="resource-item"><span style="color:#86efac;">Sheep</span><strong id="sheepCount">0</strong></div>
+        <div class="resource-item"><span style="color:#9ca3af;">Ore</span><strong id="oreCount">0</strong></div>
+        <div class="resource-item"><span style="color:#15803d;">Wood</span><strong id="woodCount">0</strong></div>
+        <div class="resource-item"><span style="color:#b45309;">Brick</span><strong id="brickCount">0</strong></div>
       </div>
-      <div class="player-list" id="playerList"></div>
     </aside>
 
     <main class="panel board-panel">
@@ -178,17 +205,23 @@
       <div class="controls">
         <button id="countButton" class="btn btn-primary" disabled>Count</button>
         <button id="rollButton" class="btn btn-success" disabled>Roll Dice</button>
+        <button id="randomTileButton" class="btn btn-info" disabled>Random Tiles</button>
+        <button id="randomPipButton" class="btn btn-warning" disabled>Random Pips</button>
         <button id="roadButton" class="btn btn-info" disabled>Place Road</button>
         <button id="settlementButton" class="btn btn-warning" disabled>Place Settlement</button>
         <button id="cityButton" class="btn btn-danger" disabled>Place City</button>
       </div>
       <div id="rollDisplay" class="mb-2"><strong>Last roll:</strong> None</div>
-      <div class="hexagon">Hexagon</div>
+      <div id="hexagon" class="hexagon"><span id="hexagonText">Hexagon</span><span id="hexagonPip">-</span></div>
     </main>
 
     <aside class="panel">
       <h3>Event Log</h3>
-      <ul id="eventList" class="event-list"></ul>
+      <div class="event-log-box">
+        <ul id="eventList" class="event-list"></ul>
+      </div>
+      <h4 class="mt-3">Players</h4>
+      <div id="playerList" class="player-list"></div>
     </aside>
   </div>
 
@@ -211,17 +244,43 @@
     const settlementCount = document.getElementById('settlementCount')
     const roadCount = document.getElementById('roadCount')
     const cityCount = document.getElementById('cityCount')
+    const wheatCount = document.getElementById('wheatCount')
+    const sheepCount = document.getElementById('sheepCount')
+    const oreCount = document.getElementById('oreCount')
+    const woodCount = document.getElementById('woodCount')
+    const brickCount = document.getElementById('brickCount')
     const playerList = document.getElementById('playerList')
     const eventList = document.getElementById('eventList')
     const rollDisplay = document.getElementById('rollDisplay')
     const countButton = document.getElementById('countButton')
     const rollButton = document.getElementById('rollButton')
+    const randomTileButton = document.getElementById('randomTileButton')
+    const randomPipButton = document.getElementById('randomPipButton')
     const roadButton = document.getElementById('roadButton')
     const settlementButton = document.getElementById('settlementButton')
     const cityButton = document.getElementById('cityButton')
+    const setupToggle = document.getElementById('setupToggle')
+    const flipButton = document.getElementById('flipButton')
+    const hexagon = document.getElementById('hexagon')
+    const hexagonText = document.getElementById('hexagonText')
+    const hexagonPip = document.getElementById('hexagonPip')
+
+    const resourceColors = {
+      Sheep: '#86efac',
+      Wheat: '#facc15',
+      Ore: '#9ca3af',
+      Wood: '#15803d',
+      Brick: '#b45309'
+    }
 
     function getCurrentPlayer() {
       return state.players.find((player) => player.id === currentPlayerId) || null
+    }
+
+    function clearPlayerIdentity() {
+      localStorage.removeItem(STORAGE_KEY)
+      currentPlayerId = null
+      currentPlayerName = ''
     }
 
     function render() {
@@ -240,6 +299,12 @@
         roadCount.textContent = '15'
         cityCount.textContent = '4'
       }
+
+      wheatCount.textContent = '0'
+      sheepCount.textContent = '0'
+      oreCount.textContent = '0'
+      woodCount.textContent = '0'
+      brickCount.textContent = '0'
 
       playerList.innerHTML = ''
       for (let index = 0; index < 4; index += 1) {
@@ -272,28 +337,27 @@
         rollDisplay.innerHTML = '<strong>Last roll:</strong> None'
       }
 
-      const controlsEnabled = Boolean(currentPlayer)
-      countButton.disabled = !controlsEnabled
-      rollButton.disabled = !controlsEnabled
-      roadButton.disabled = !controlsEnabled || (currentPlayer && currentPlayer.roads <= 0)
-      settlementButton.disabled = !controlsEnabled || (currentPlayer && currentPlayer.settlements <= 0)
-      cityButton.disabled = !controlsEnabled || (currentPlayer && currentPlayer.cities <= 0)
-    }
-
-    async function requestJson(url, body) {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
-
-      const data = await response.json()
-      if (data.error) {
-        alert(data.error)
-        return null
+      if (state.boardResource) {
+        hexagon.style.background = resourceColors[state.boardResource] || '#f8fafc'
+        hexagonText.textContent = state.boardResource
+      } else {
+        hexagon.style.background = '#f8fafc'
+        hexagonText.textContent = 'Hexagon'
       }
 
-      return data
+      hexagonPip.textContent = state.boardPip !== null && state.boardPip !== undefined ? state.boardPip : '-'
+
+      setupToggle.checked = Boolean(state.setupMode)
+      const controlsEnabled = Boolean(currentPlayer)
+      const setupEnabled = controlsEnabled && state.setupMode
+
+      countButton.disabled = !controlsEnabled
+      rollButton.disabled = !controlsEnabled
+      randomTileButton.disabled = !setupEnabled
+      randomPipButton.disabled = !setupEnabled
+      roadButton.disabled = !controlsEnabled || state.setupMode
+      settlementButton.disabled = !controlsEnabled || state.setupMode
+      cityButton.disabled = !controlsEnabled || state.setupMode
     }
 
     function savePlayerIdentity(playerId, name) {
@@ -316,6 +380,22 @@
       }
 
       return null
+    }
+
+    async function requestJson(url, body) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+
+      const data = await response.json()
+      if (data.error) {
+        alert(data.error)
+        return null
+      }
+
+      return data
     }
 
     async function joinPlayer(name) {
@@ -363,6 +443,30 @@
       }
     })
 
+    randomTileButton.addEventListener('click', async () => {
+      if (!currentPlayerId) {
+        return
+      }
+
+      const data = await requestJson('/random-tile', { playerId: currentPlayerId })
+      if (data) {
+        state = data.state
+        render()
+      }
+    })
+
+    randomPipButton.addEventListener('click', async () => {
+      if (!currentPlayerId) {
+        return
+      }
+
+      const data = await requestJson('/random-pips', { playerId: currentPlayerId })
+      if (data) {
+        state = data.state
+        render()
+      }
+    })
+
     roadButton.addEventListener('click', async () => {
       if (!currentPlayerId) {
         return
@@ -399,9 +503,35 @@
       }
     })
 
+    setupToggle.addEventListener('change', async () => {
+      const data = await requestJson('/toggle-setup', { enabled: setupToggle.checked })
+      if (data) {
+        state = data.state
+        render()
+      }
+    })
+
+    flipButton.addEventListener('click', async () => {
+      const confirmed = window.confirm('Flip the board and reset the game for everyone?')
+      if (!confirmed) {
+        return
+      }
+
+      const data = await requestJson('/reset-game', {})
+      if (data) {
+        clearPlayerIdentity()
+        state = data.state
+        render()
+      }
+    })
+
     const eventSource = new EventSource('/events')
     eventSource.addEventListener('state', (event) => {
-      state = JSON.parse(event.data)
+      const incoming = JSON.parse(event.data)
+      if (incoming.reset) {
+        clearPlayerIdentity()
+      }
+      state = incoming
       render()
     })
 

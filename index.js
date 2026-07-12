@@ -6,17 +6,39 @@ const app = express()
 const clients = new Set()
 const players = []
 const colors = ['#2563eb', '#16a34a', '#ea580c', '#dc2626']
-const dicePool = [2, 3, 3, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8, 9, 9, 9, 9, 10, 10, 10, 11, 11, 12]
+const dicePool = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12]
 const eventLog = []
+const resourceTypes = [
+  { name: 'Sheep', color: '#86efac' },
+  { name: 'Wheat', color: '#facc15' },
+  { name: 'Ore', color: '#9ca3af' },
+  { name: 'Wood', color: '#15803d' },
+  { name: 'Brick', color: '#b45309' }
+]
+
 let nextPlayerId = 1
 let lastRoll = null
 let lastRollBy = null
+let setupMode = false
+let boardResource = null
+let boardPip = null
 
 function addEvent(message) {
   eventLog.push(message)
-  if (eventLog.length > 12) {
+  if (eventLog.length > 30) {
     eventLog.shift()
   }
+}
+
+function resetGameState() {
+  players.splice(0, players.length)
+  eventLog.splice(0, eventLog.length)
+  lastRoll = null
+  lastRollBy = null
+  setupMode = false
+  boardResource = null
+  boardPip = null
+  nextPlayerId = 1
 }
 
 function getState() {
@@ -31,9 +53,13 @@ function getState() {
       cities: player.cities
     })),
     maxPlayers: 4,
-    eventLog: eventLog.slice(-12),
+    eventLog: eventLog.slice(-30),
     lastRoll,
-    lastRollBy
+    lastRollBy,
+    setupMode,
+    boardResource,
+    boardPip,
+    reset: false
   }
 }
 
@@ -193,5 +219,57 @@ app
     broadcastState()
 
     return res.json({ state: getState() })
+  })
+  .post('/random-tile', (req, res) => {
+    const playerId = Number(req.body?.playerId)
+    const player = players.find((entry) => entry.id === playerId)
+
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found.' })
+    }
+
+    if (!setupMode) {
+      return res.status(400).json({ error: 'Setup mode is disabled.' })
+    }
+
+    const resource = resourceTypes[Math.floor(Math.random() * resourceTypes.length)]
+    boardResource = resource.name
+    boardPip = boardPip || null
+    addEvent(`${player.name} randomized the tile to ${resource.name}.`)
+    broadcastState()
+
+    return res.json({ state: getState() })
+  })
+  .post('/random-pips', (req, res) => {
+    const playerId = Number(req.body?.playerId)
+    const player = players.find((entry) => entry.id === playerId)
+
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found.' })
+    }
+
+    if (!setupMode) {
+      return res.status(400).json({ error: 'Setup mode is disabled.' })
+    }
+
+    boardPip = dicePool[Math.floor(Math.random() * dicePool.length)]
+    addEvent(`${player.name} randomized the pip value to ${boardPip}.`)
+    broadcastState()
+
+    return res.json({ state: getState() })
+  })
+  .post('/toggle-setup', (req, res) => {
+    setupMode = Boolean(req.body?.enabled)
+    addEvent(setupMode ? 'Setup mode enabled.' : 'Setup mode disabled.')
+    broadcastState()
+
+    return res.json({ state: getState() })
+  })
+  .post('/reset-game', (req, res) => {
+    resetGameState()
+    addEvent('The board was flipped and the game was reset.')
+    broadcastState()
+
+    return res.json({ state: getState(), reset: true })
   })
   .listen(PORT, () => console.log(`Listening on ${PORT}`))
