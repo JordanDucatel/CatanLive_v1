@@ -44,6 +44,8 @@ let lastRollBy = null
 let setupMode = true
 let boardResource = null
 let boardPip = null
+let longestRoadPlayerId = null
+let largestArmyPlayerId = null
 
 function addEvent(message) {
   eventLog.push(message)
@@ -75,6 +77,12 @@ function createPlayer(name, id) {
       monopoly: 0,
       roadBuilding: 0,
       yearOfPlenty: 0
+    },
+    playedDevelopmentCards: {
+      knights: 0,
+      monopoly: 0,
+      roadBuilding: 0,
+      yearOfPlenty: 0
     }
   }
 }
@@ -99,7 +107,8 @@ function captureSnapshot() {
     players: players.map((player) => ({
       ...player,
       resources: { ...player.resources },
-      developmentCards: { ...player.developmentCards }
+      developmentCards: { ...player.developmentCards },
+      playedDevelopmentCards: { ...player.playedDevelopmentCards }
     })),
     eventLog: eventLog.slice(),
     nextPlayerId,
@@ -108,6 +117,8 @@ function captureSnapshot() {
     setupMode,
     boardResource,
     boardPip,
+    longestRoadPlayerId,
+    largestArmyPlayerId,
     bankResources: { ...bankResources },
     bankDevelopmentCards: { ...bankDevelopmentCards }
   }
@@ -117,7 +128,8 @@ function restoreSnapshot(snapshot) {
   players.splice(0, players.length, ...snapshot.players.map((player) => ({
     ...player,
     resources: { ...player.resources },
-    developmentCards: { ...player.developmentCards }
+    developmentCards: { ...player.developmentCards },
+    playedDevelopmentCards: { ...player.playedDevelopmentCards }
   })))
   eventLog.splice(0, eventLog.length, ...snapshot.eventLog)
   nextPlayerId = snapshot.nextPlayerId
@@ -126,6 +138,8 @@ function restoreSnapshot(snapshot) {
   setupMode = snapshot.setupMode
   boardResource = snapshot.boardResource
   boardPip = snapshot.boardPip
+  longestRoadPlayerId = snapshot.longestRoadPlayerId
+  largestArmyPlayerId = snapshot.largestArmyPlayerId
   Object.keys(bankResources).forEach((resource) => {
     bankResources[resource] = snapshot.bankResources[resource]
   })
@@ -142,6 +156,8 @@ function resetGameState() {
   setupMode = true
   boardResource = null
   boardPip = null
+  longestRoadPlayerId = null
+  largestArmyPlayerId = null
   nextPlayerId = 1
   Object.keys(bankResources).forEach((resource) => {
     bankResources[resource] = 19
@@ -163,7 +179,8 @@ function getState() {
       roads: player.roads,
       cities: player.cities,
       resources: { ...player.resources },
-      developmentCards: { ...player.developmentCards }
+      developmentCards: { ...player.developmentCards },
+      playedDevelopmentCards: { ...player.playedDevelopmentCards }
     })),
     maxPlayers: 4,
     eventLog: eventLog.slice(-30),
@@ -172,6 +189,8 @@ function getState() {
     setupMode,
     boardResource,
     boardPip,
+    longestRoadPlayerId,
+    largestArmyPlayerId,
     bank: {
       resources: { ...bankResources },
       developmentCards: { ...bankDevelopmentCards }
@@ -436,11 +455,42 @@ app
       return res.status(400).json({ error: 'The bank is out of development cards.' })
     }
 
-    const card = developmentCardTypes.find((entry) => entry.key === cardKey)
     pushHistory(`${displayName} took a development card.`, displayName)
     bankDevelopmentCards[cardKey] -= 1
     player.developmentCards[cardKey] += 1
-    addEvent(`${displayName} took a ${card?.name || cardKey} development card.`)
+    addEvent(`${displayName} took a development card.`)
+    broadcastState()
+
+    return res.json({ state: getState() })
+  })
+  .post('/take-longest-road', (req, res) => {
+    const playerId = Number(req.body?.playerId)
+    const resolved = resolvePlayer(playerId, req.body?.playerName)
+
+    if (!resolved) {
+      return res.status(404).json({ error: 'Player not found.' })
+    }
+
+    const { player, displayName } = resolved
+    longestRoadPlayerId = player.id
+    pushHistory(`${displayName} claimed longest road.`, displayName)
+    addEvent(`${displayName} claimed longest road.`)
+    broadcastState()
+
+    return res.json({ state: getState() })
+  })
+  .post('/take-largest-army', (req, res) => {
+    const playerId = Number(req.body?.playerId)
+    const resolved = resolvePlayer(playerId, req.body?.playerName)
+
+    if (!resolved) {
+      return res.status(404).json({ error: 'Player not found.' })
+    }
+
+    const { player, displayName } = resolved
+    largestArmyPlayerId = player.id
+    pushHistory(`${displayName} claimed largest army.`, displayName)
+    addEvent(`${displayName} claimed largest army.`)
     broadcastState()
 
     return res.json({ state: getState() })
