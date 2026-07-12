@@ -15,8 +15,12 @@
           <div class="card-body">
             <h1 class="card-title"><%= title %></h1>
             <p class="card-text"><%= message %></p>
-            <button id="countButton" class="btn btn-primary">Count</button>
-            <p id="countDisplay" class="mt-3 mb-0">Count: <%= count %></p>
+            <button id="countButton" class="btn btn-primary" disabled>Count</button>
+            <p id="playerLabel" class="mt-3 mb-0">Your name: Waiting for player name...</p>
+            <div class="mt-4">
+              <h5>Player Scores</h5>
+              <ul id="playerList" class="list-group text-left"></ul>
+            </div>
           </div>
         </div>
       </div>
@@ -26,19 +30,83 @@
   <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/popper.js@1.14.7/dist/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
   <script>
-    const button = document.getElementById('countButton')
-    const display = document.getElementById('countDisplay')
+    const initialState = <%- JSON.stringify(initialState) %>
+    let currentPlayerId = null
+    let currentPlayerName = ''
+    let state = initialState
 
-    button.addEventListener('click', async () => {
-      const response = await fetch('/count', {
+    const button = document.getElementById('countButton')
+    const playerLabel = document.getElementById('playerLabel')
+    const playerList = document.getElementById('playerList')
+
+    function renderPlayers() {
+      const slots = Array.from({ length: 4 }, (_, index) => {
+        const player = state.players[index]
+        return player
+          ? { id: player.id, name: player.name, count: player.count }
+          : { name: `Player ${index + 1}`, count: 0 }
+      })
+
+      playerList.innerHTML = ''
+      slots.forEach((slot) => {
+        const item = document.createElement('li')
+        item.className = 'list-group-item d-flex justify-content-between align-items-center'
+        item.innerHTML = `<span>${slot.name}</span><span class="badge badge-primary badge-pill">${slot.count}</span>`
+        playerList.appendChild(item)
+      })
+
+      button.disabled = !currentPlayerId
+      playerLabel.innerHTML = currentPlayerId
+        ? `Your name: <strong>${currentPlayerName}</strong>`
+        : 'Your name: Waiting for player name...'
+    }
+
+    async function joinPlayer(name) {
+      const response = await fetch('/join', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
+        body: JSON.stringify({ name })
       })
 
       const data = await response.json()
-      display.textContent = `Count: ${data.count}`
+      if (data.playerId) {
+        currentPlayerId = data.playerId
+        currentPlayerName = data.name
+        state = data.state
+        renderPlayers()
+      } else {
+        alert(data.error || 'Unable to join the game.')
+      }
+    }
+
+    button.addEventListener('click', async () => {
+      if (!currentPlayerId) {
+        return
+      }
+
+      await fetch('/count', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId: currentPlayerId })
+      })
     })
+
+    const eventSource = new EventSource('/events')
+    eventSource.addEventListener('state', (event) => {
+      state = JSON.parse(event.data)
+      renderPlayers()
+    })
+
+    window.addEventListener('load', () => {
+      const enteredName = window.prompt('Enter your player name', '')
+      if (enteredName && enteredName.trim()) {
+        joinPlayer(enteredName.trim())
+      } else {
+        renderPlayers()
+      }
+    })
+
+    renderPlayers()
   </script>
 </body>
 </html>
