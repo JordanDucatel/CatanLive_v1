@@ -463,6 +463,33 @@ app
 
     return res.json({ state: getState() })
   })
+  .post('/play-development-card', (req, res) => {
+    const playerId = Number(req.body?.playerId)
+    const resolved = resolvePlayer(playerId, req.body?.playerName)
+    const cardKey = req.body?.cardKey
+
+    if (!resolved) {
+      return res.status(404).json({ error: 'Player not found.' })
+    }
+
+    if (!cardKey || !['knights', 'monopoly', 'roadBuilding', 'yearOfPlenty'].includes(cardKey)) {
+      return res.status(400).json({ error: 'That development card cannot be played.' })
+    }
+
+    const { player, displayName } = resolved
+    if ((player.developmentCards[cardKey] || 0) <= 0) {
+      return res.status(400).json({ error: 'You do not have that development card to play.' })
+    }
+
+    const cardName = developmentCardTypes.find((entry) => entry.key === cardKey)?.name || cardKey
+    pushHistory(`${displayName} played a ${cardName.toLowerCase()} development card.`, displayName)
+    player.developmentCards[cardKey] -= 1
+    player.playedDevelopmentCards[cardKey] += 1
+    addEvent(`${displayName} played a ${cardName.toLowerCase()} development card.`)
+    broadcastState()
+
+    return res.json({ state: getState() })
+  })
   .post('/take-longest-road', (req, res) => {
     const playerId = Number(req.body?.playerId)
     const resolved = resolvePlayer(playerId, req.body?.playerName)
