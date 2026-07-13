@@ -96,6 +96,12 @@
       margin-top: 0;
     }
 
+    .center-column {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
     .board-panel {
       background: #87ceeb;
       min-height: 540px;
@@ -107,13 +113,27 @@
       gap: 12px;
     }
 
+    .board-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      gap: 12px;
+    }
+
+    .board-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
     .bank-panel {
       width: 100%;
-      max-width: 480px;
-      background: rgba(255, 255, 255, 0.7);
+      background: white;
       border-radius: 12px;
       padding: 14px;
-      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
     }
 
     .bank-grid {
@@ -343,39 +363,39 @@
 
   <div class="layout">
     <aside class="panel">
-      <h3>Player Hand</h3>
+      <h3>Hand</h3>
       <div class="resource-list">
         <div class="resource-item"><span>Settlements</span><strong id="settlementCount">5</strong></div>
         <div class="resource-item"><span>Roads</span><strong id="roadCount">15</strong></div>
         <div class="resource-item"><span>Cities</span><strong id="cityCount">4</strong></div>
       </div>
       <div id="playerResources" class="resource-list"></div>
-      <div class="resource-list">
-        <div class="resource-item"><span>Hidden Dev. Cards</span><strong id="developmentCardCount">0</strong></div>
-        <div class="resource-item"><span>Played Dev. Cards</span><strong id="playedDevelopmentCardCount">0</strong></div>
-      </div>
       <div class="dev-card-section">
-        <div class="dev-card-section-title">Hidden Development Cards</div>
+        <div class="dev-card-section-title">Hidden Dev Cards</div>
         <div id="hiddenDevelopmentCards" class="resource-list"></div>
-      </div>
-      <div class="dev-card-section">
-        <div class="dev-card-section-title">Played Development Cards</div>
-        <div id="playedDevelopmentCards" class="resource-list"></div>
       </div>
     </aside>
 
-    <main class="panel board-panel">
-      <h3>Board</h3>
-      <div id="rollDisplay" class="mb-2"><strong>Last roll:</strong> None</div>
-      <div id="hexagon" class="hexagon"><span id="hexagonText">Hexagon</span><span id="hexagonPip">-</span></div>
-      <div class="bank-panel">
+    <main class="center-column">
+      <div class="panel board-panel">
+        <div class="board-header">
+          <h3>Board</h3>
+          <div class="board-actions">
+            <button id="randomTileButton" class="btn btn-info" disabled>Random Tiles</button>
+            <button id="randomPipButton" class="btn btn-warning" disabled>Random Pips</button>
+          </div>
+        </div>
+        <div id="rollDisplay" class="mb-2"><strong>Last roll:</strong> None</div>
+        <div id="hexagon" class="hexagon"><span id="hexagonText">Hexagon</span><span id="hexagonPip">-</span></div>
+      </div>
+      <div class="panel bank-panel">
         <h4>Bank</h4>
         <div id="bankResources" class="bank-grid"></div>
       </div>
     </main>
 
     <aside class="panel">
-      <h3>Event Log</h3>
+      <h3>Log</h3>
       <div class="event-log-box">
         <ul id="eventList" class="event-list"></ul>
       </div>
@@ -386,10 +406,7 @@
 
   <div class="bottom-bar">
     <div class="bottom-controls">
-      <button id="countButton" class="btn btn-primary" disabled>Count</button>
       <button id="rollButton" class="btn btn-success" disabled>Roll Dice</button>
-      <button id="randomTileButton" class="btn btn-info" disabled>Random Tiles</button>
-      <button id="randomPipButton" class="btn btn-warning" disabled>Random Pips</button>
       <button id="roadButton" class="btn btn-info" disabled>Place Road</button>
       <button id="settlementButton" class="btn btn-warning" disabled>Place Settlement</button>
       <button id="cityButton" class="btn btn-danger" disabled>Place City</button>
@@ -412,16 +429,12 @@
     const settlementCount = document.getElementById('settlementCount')
     const roadCount = document.getElementById('roadCount')
     const cityCount = document.getElementById('cityCount')
-    const developmentCardCount = document.getElementById('developmentCardCount')
-    const playedDevelopmentCardCount = document.getElementById('playedDevelopmentCardCount')
     const playerResources = document.getElementById('playerResources')
     const hiddenDevelopmentCards = document.getElementById('hiddenDevelopmentCards')
-    const playedDevelopmentCards = document.getElementById('playedDevelopmentCards')
     const bankResources = document.getElementById('bankResources')
     const playerList = document.getElementById('playerList')
     const eventList = document.getElementById('eventList')
     const rollDisplay = document.getElementById('rollDisplay')
-    const countButton = document.getElementById('countButton')
     const rollButton = document.getElementById('rollButton')
     const randomTileButton = document.getElementById('randomTileButton')
     const randomPipButton = document.getElementById('randomPipButton')
@@ -459,10 +472,6 @@
       return Object.values(player?.developmentCards || {}).reduce((total, value) => total + Number(value || 0), 0)
     }
 
-    function getPlayedDevelopmentCardTotal(player) {
-      return Object.values(player?.playedDevelopmentCards || {}).reduce((total, value) => total + Number(value || 0), 0)
-    }
-
     async function runAction(handler) {
       if (actionInFlight) {
         return null
@@ -483,8 +492,6 @@
       const currentPlayer = getCurrentPlayer()
       const bank = state.bank || { resources: {}, developmentCards: {} }
       const playerResourcesForHand = currentPlayer?.resources || {}
-      const devCardTotal = getDevelopmentCardTotal(currentPlayer)
-      const playedDevCardTotal = getPlayedDevelopmentCardTotal(currentPlayer)
 
       playerNameBar.textContent = currentPlayer
         ? `Your name: ${currentPlayerName}`
@@ -499,9 +506,6 @@
         roadCount.textContent = '15'
         cityCount.textContent = '4'
       }
-
-      developmentCardCount.textContent = devCardTotal
-      playedDevelopmentCardCount.textContent = playedDevCardTotal
 
       playerResources.innerHTML = ''
       ;['Wheat', 'Sheep', 'Ore', 'Wood', 'Brick'].forEach((resource) => {
@@ -528,7 +532,6 @@
       hiddenDevelopmentCards.innerHTML = ''
       ;[
         { key: 'knights', label: 'Knight' },
-        { key: 'victoryPoints', label: 'Victory Point' },
         { key: 'monopoly', label: 'Monopoly' },
         { key: 'roadBuilding', label: 'Road Building' },
         { key: 'yearOfPlenty', label: 'Year of Plenty' }
@@ -541,7 +544,7 @@
         const button = document.createElement('button')
         button.type = 'button'
         button.className = 'resource-item dev-card-button'
-        button.innerHTML = `<span>${entry.label}</span><strong>${count}</strong>`
+        button.innerHTML = `<span>${entry.label}</span>`
         button.disabled = !currentPlayer || count <= 0 || actionInFlight || Boolean(state.setupMode)
         button.title = `Play ${entry.label}`
         button.addEventListener('click', () => {
@@ -551,24 +554,6 @@
           handlePlayDevelopmentCard(entry.key)
         })
         hiddenDevelopmentCards.appendChild(button)
-      })
-
-      playedDevelopmentCards.innerHTML = ''
-      ;[
-        { key: 'knights', label: 'Knight' },
-        { key: 'monopoly', label: 'Monopoly' },
-        { key: 'roadBuilding', label: 'Road Building' },
-        { key: 'yearOfPlenty', label: 'Year of Plenty' }
-      ].forEach((entry) => {
-        const count = currentPlayer ? (currentPlayer.playedDevelopmentCards?.[entry.key] || 0) : 0
-        if (!currentPlayer || count <= 0) {
-          return
-        }
-
-        const item = document.createElement('div')
-        item.className = 'resource-item'
-        item.innerHTML = `<span>${entry.label}</span><strong>${count}</strong>`
-        playedDevelopmentCards.appendChild(item)
       })
 
       bankResources.innerHTML = ''
@@ -618,7 +603,6 @@
         item.className = 'player-entry'
         const resourceTotal = Object.values(slot.resources || {}).reduce((sum, value) => sum + Number(value || 0), 0)
         const devTotal = getDevelopmentCardTotal(slot)
-        const playedDevTotal = getPlayedDevelopmentCardTotal(slot)
         const specialMarks = []
         if (slot.id === state.longestRoadPlayerId) {
           specialMarks.push('<span class="special-marker" title="Longest Road">LR</span>')
@@ -631,9 +615,15 @@
           { key: 'monopoly', label: '⛓️' },
           { key: 'roadBuilding', label: '🛣️' },
           { key: 'yearOfPlenty', label: '🌾' }
-        ].filter((entry) => (slot.playedDevelopmentCards?.[entry.key] || 0) > 0)
-          .map((entry) => `<span class="mini-pill" title="${entry.key}">${entry.label}</span>`)
-          .join('')
+        ].flatMap((entry) => {
+          const count = slot.playedDevelopmentCards?.[entry.key] || 0
+          if (count <= 0) {
+            return []
+          }
+
+          const label = count > 1 ? `${entry.label}×${count}` : entry.label
+          return [`<span class="mini-pill" title="${entry.key} ×${count}">${label}</span>`]
+        }).join('')
         item.innerHTML = `
           <div>
             <div style="color:${slot.color}; font-weight:700;">${slot.name}${specialMarks.length ? ` ${specialMarks.join('')}` : ''}</div>
@@ -675,7 +665,6 @@
       const controlsEnabled = Boolean(currentPlayer) && !actionInFlight
       const setupEnabled = controlsEnabled && state.setupMode
 
-      countButton.disabled = !controlsEnabled
       rollButton.disabled = !controlsEnabled
       randomTileButton.disabled = !setupEnabled
       randomPipButton.disabled = !setupEnabled
@@ -826,19 +815,6 @@
         }
       })
     }
-
-    countButton.addEventListener('click', async () => {
-      if (!currentPlayerId) {
-        return
-      }
-
-      await runAction(async () => {
-        const data = await requestJson('/count', { playerId: currentPlayerId, playerName: currentPlayerName })
-        if (data) {
-          state = data.state
-        }
-      })
-    })
 
     rollButton.addEventListener('click', async () => {
       if (!currentPlayerId) {
