@@ -46,6 +46,25 @@ let boardResource = null
 let boardPip = null
 let longestRoadPlayerId = null
 let largestArmyPlayerId = null
+let boardRoads = []
+let boardPoints = []
+
+function createEmptyBoardRoads() {
+  return Array.from({ length: 6 }, (_, id) => ({
+    id,
+    ownerId: null,
+    ownerColor: null
+  }))
+}
+
+function createEmptyBoardPoints() {
+  return Array.from({ length: 6 }, (_, id) => ({
+    id,
+    ownerId: null,
+    ownerColor: null,
+    pieceType: null
+  }))
+}
 
 function addEvent(message) {
   eventLog.push(message)
@@ -119,6 +138,8 @@ function captureSnapshot() {
     boardPip,
     longestRoadPlayerId,
     largestArmyPlayerId,
+    boardRoads: boardRoads.map((slot) => ({ ...slot })),
+    boardPoints: boardPoints.map((slot) => ({ ...slot })),
     bankResources: { ...bankResources },
     bankDevelopmentCards: { ...bankDevelopmentCards }
   }
@@ -140,6 +161,8 @@ function restoreSnapshot(snapshot) {
   boardPip = snapshot.boardPip
   longestRoadPlayerId = snapshot.longestRoadPlayerId
   largestArmyPlayerId = snapshot.largestArmyPlayerId
+  boardRoads = (snapshot.boardRoads || []).map((slot) => ({ ...slot }))
+  boardPoints = (snapshot.boardPoints || []).map((slot) => ({ ...slot }))
   Object.keys(bankResources).forEach((resource) => {
     bankResources[resource] = snapshot.bankResources[resource]
   })
@@ -158,6 +181,8 @@ function resetGameState() {
   boardPip = null
   longestRoadPlayerId = null
   largestArmyPlayerId = null
+  boardRoads = createEmptyBoardRoads()
+  boardPoints = createEmptyBoardPoints()
   nextPlayerId = 1
   Object.keys(bankResources).forEach((resource) => {
     bankResources[resource] = 19
@@ -189,6 +214,10 @@ function getState() {
     setupMode,
     boardResource,
     boardPip,
+    board: {
+      roads: boardRoads.map((slot) => ({ ...slot })),
+      points: boardPoints.map((slot) => ({ ...slot }))
+    },
     longestRoadPlayerId,
     largestArmyPlayerId,
     bank: {
@@ -223,6 +252,13 @@ function chooseDevelopmentCard() {
   const selected = available[Math.floor(Math.random() * available.length)]
   return selected.key
 }
+
+function initializeBoardState() {
+  boardRoads = createEmptyBoardRoads()
+  boardPoints = createEmptyBoardPoints()
+}
+
+initializeBoardState()
 
 app
   .use(express.json())
@@ -521,6 +557,98 @@ app
     broadcastState()
 
     return res.json({ state: getState() })
+  })
+  .post('/place-piece', (req, res) => {
+    const playerId = Number(req.body?.playerId)
+    const resolved = resolvePlayer(playerId, req.body?.playerName)
+    const pieceType = req.body?.pieceType
+    const targetType = req.body?.targetType
+    const targetId = Number(req.body?.targetId)
+
+    if (!resolved) {
+      return res.status(404).json({ error: 'Player not found.' })
+    }
+
+    if (!Number.isInteger(targetId) || targetId < 0 || targetId > 5) {
+      return res.status(400).json({ error: 'That board location is invalid.' })
+    }
+
+    const { player, displayName } = resolved
+
+    if (pieceType === 'road') {
+      if (targetType !== 'road') {
+        return res.status(400).json({ error: 'Roads can only be placed on edge slots.' })
+      }
+
+      if (player.roads <= 0) {
+        return res.status(400).json({ error: 'You do not have any roads left.' })
+      }
+
+      const slot = boardRoads.find((entry) => entry.id === targetId)
+      if (!slot || slot.ownerId) {
+        return res.status(400).json({ error: 'That road slot is already occupied.' })
+      }
+
+      pushHistory(`${displayName} placed a road on edge ${targetId + 1}.`, displayName)
+      slot.ownerId = player.id
+      slot.ownerColor = player.color
+      player.roads -= 1
+      addEvent(`${displayName} placed a road.`)
+      broadcastState()
+
+      return res.json({ state: getState() })
+    }
+
+    if (pieceType === 'settlement') {
+      if (targetType !== 'point') {
+        return res.status(400).json({ error: 'Settlements can only be placed on point slots.' })
+      }
+
+      if (player.settlements <= 0) {
+        return res.status(400).json({ error: 'You do not have any settlements left.' })
+      }
+
+      const slot = boardPoints.find((entry) => entry.id === targetId)
+      if (!slot || slot.ownerId) {
+        return res.status(400).json({ error: 'That point slot is already occupied.' })
+      }
+
+      pushHistory(`${displayName} placed a settlement on point ${targetId + 1}.`, displayName)
+      slot.ownerId = player.id
+      slot.ownerColor = player.color
+      slot.pieceType = 'settlement'
+      player.settlements -= 1
+      addEvent(`${displayName} placed a settlement.`)
+      broadcastState()
+
+      return res.json({ state: getState() })
+    }
+
+    if (pieceType === 'city') {
+      if (targetType !== 'point') {
+        return res.status(400).json({ error: 'Cities can only be placed on point slots.' })
+      }
+
+      if (player.cities <= 0) {
+        return res.status(400).json({ error: 'You do not have any cities left.' })
+      }
+
+      const slot = boardPoints.find((entry) => entry.id === targetId)
+      if (!slot || slot.ownerId !== player.id || slot.pieceType !== 'settlement') {
+        return res.status(400).json({ error: 'Cities can only upgrade your own settlement.' })
+      }
+
+      pushHistory(`${displayName} upgraded a settlement to a city on point ${targetId + 1}.`, displayName)
+      slot.pieceType = 'city'
+      player.cities -= 1
+      player.settlements += 1
+      addEvent(`${displayName} upgraded a settlement to a city.`)
+      broadcastState()
+
+      return res.json({ state: getState() })
+    }
+
+    return res.status(400).json({ error: 'That piece type is not supported.' })
   })
   .post('/random-tile', (req, res) => {
     const playerId = Number(req.body?.playerId)

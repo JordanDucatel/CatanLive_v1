@@ -160,6 +160,91 @@
       padding: 10px;
     }
 
+    .hexagon-wrapper {
+      position: relative;
+      width: 200px;
+      height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .hex-overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .hex-overlay polygon {
+      fill: none;
+      stroke: #0f172a;
+      stroke-width: 8;
+      stroke-linejoin: round;
+    }
+
+    .hex-overlay circle {
+      fill: #0f172a;
+    }
+
+    .board-slot-layer {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 4;
+    }
+
+    .board-slot {
+      position: absolute;
+      pointer-events: auto;
+      border: 2px solid #334155;
+      background: rgba(255, 255, 255, 0.78);
+      color: #0f172a;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      line-height: 1;
+      padding: 0;
+    }
+
+    .board-slot-target {
+      border-color: #16a34a;
+      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.28);
+      cursor: pointer;
+    }
+
+    .board-slot-road {
+      width: 50px;
+      height: 14px;
+      border-radius: 999px;
+    }
+
+    .board-slot-road.r0 { left: 75px; top: 6px; }
+    .board-slot-road.r1 { left: 145px; top: 48px; transform: rotate(60deg); }
+    .board-slot-road.r2 { left: 145px; top: 136px; transform: rotate(-60deg); }
+    .board-slot-road.r3 { left: 75px; top: 178px; }
+    .board-slot-road.r4 { left: 4px; top: 136px; transform: rotate(60deg); }
+    .board-slot-road.r5 { left: 4px; top: 48px; transform: rotate(-60deg); }
+
+    .board-slot-point {
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+    }
+
+    .board-slot-point.p0 { left: 37px; top: 0px; }
+    .board-slot-point.p1 { left: 137px; top: 0px; }
+    .board-slot-point.p2 { left: 176px; top: 87px; }
+    .board-slot-point.p3 { left: 137px; top: 173px; }
+    .board-slot-point.p4 { left: 37px; top: 173px; }
+    .board-slot-point.p5 { left: -2px; top: 87px; }
+
     .resource-list {
       display: flex;
       flex-direction: column;
@@ -224,6 +309,12 @@
     .hand-chip-action:hover:not(:disabled) {
       background: #dbeafe;
       cursor: pointer;
+    }
+
+    .hand-chip-selected {
+      background: #1d4ed8;
+      color: #ffffff;
+      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35);
     }
 
     .hand-chip:disabled {
@@ -384,6 +475,11 @@
         height: 150px;
       }
 
+      .hexagon-wrapper {
+        width: 170px;
+        height: 170px;
+      }
+
       .bank-grid {
         grid-template-columns: 1fr;
       }
@@ -430,7 +526,20 @@
           </div>
         </div>
         <div id="rollDisplay" class="mb-2"><strong>Last roll:</strong> None</div>
-        <div id="hexagon" class="hexagon"><span id="hexagonText">Hexagon</span><span id="hexagonPip">-</span></div>
+        <div class="hexagon-wrapper">
+          <svg class="hex-overlay" viewBox="0 0 200 200" aria-hidden="true">
+            <polygon points="50,13 150,13 190,100 150,187 50,187 10,100"></polygon>
+            <circle cx="50" cy="13" r="5"></circle>
+            <circle cx="150" cy="13" r="5"></circle>
+            <circle cx="190" cy="100" r="5"></circle>
+            <circle cx="150" cy="187" r="5"></circle>
+            <circle cx="50" cy="187" r="5"></circle>
+            <circle cx="10" cy="100" r="5"></circle>
+          </svg>
+          <div id="boardRoadSlots" class="board-slot-layer"></div>
+          <div id="boardPointSlots" class="board-slot-layer"></div>
+          <div id="hexagon" class="hexagon"><span id="hexagonText">Hexagon</span><span id="hexagonPip">-</span></div>
+        </div>
       </div>
       <div class="panel bank-panel">
         <h4>Bank</h4>
@@ -468,6 +577,7 @@
     let currentPlayerName = ''
     let state = initialState
     let actionInFlight = false
+    let selectedPlacementPiece = null
 
     const playerNameBar = document.getElementById('playerNameBar')
     const handPieces = document.getElementById('handPieces')
@@ -491,6 +601,8 @@
     const hexagon = document.getElementById('hexagon')
     const hexagonText = document.getElementById('hexagonText')
     const hexagonPip = document.getElementById('hexagonPip')
+    const boardRoadSlots = document.getElementById('boardRoadSlots')
+    const boardPointSlots = document.getElementById('boardPointSlots')
 
     const resourceColors = {
       Sheep: '#86efac',
@@ -530,10 +642,152 @@
       }
     }
 
+    function getPieceCount(player, pieceType) {
+      if (!player) {
+        return 0
+      }
+
+      if (pieceType === 'road') {
+        return Number(player.roads || 0)
+      }
+
+      if (pieceType === 'settlement') {
+        return Number(player.settlements || 0)
+      }
+
+      if (pieceType === 'city') {
+        return Number(player.cities || 0)
+      }
+
+      return 0
+    }
+
+    function toggleSelectedPiece(pieceType) {
+      if (selectedPlacementPiece === pieceType) {
+        selectedPlacementPiece = null
+      } else {
+        selectedPlacementPiece = pieceType
+      }
+      render()
+    }
+
+    async function handlePlacePiece(pieceType, targetType, targetId) {
+      await runAction(async () => {
+        const data = await requestJson('/place-piece', {
+          playerId: currentPlayerId,
+          playerName: currentPlayerName,
+          pieceType,
+          targetType,
+          targetId
+        })
+
+        if (data) {
+          state = data.state
+          const currentPlayer = state.players.find((player) => player.id === currentPlayerId)
+          if (!currentPlayer || getPieceCount(currentPlayer, pieceType) <= 0) {
+            selectedPlacementPiece = null
+          }
+        }
+      })
+    }
+
+    function renderBoardPlacementSlots(currentPlayer) {
+      const board = state.board || { roads: [], points: [] }
+      const currentPlayerColor = currentPlayer?.color || '#1f2937'
+
+      boardRoadSlots.innerHTML = ''
+      board.points = Array.isArray(board.points) ? board.points : []
+
+      ;(Array.isArray(board.roads) ? board.roads : []).forEach((slot) => {
+        const button = document.createElement('button')
+        button.type = 'button'
+        button.className = `board-slot board-slot-road r${slot.id}`
+        const isOwned = Boolean(slot.ownerId)
+        const canPlaceRoad = Boolean(currentPlayer) && !state.setupMode && selectedPlacementPiece === 'road' && !actionInFlight && !isOwned && getPieceCount(currentPlayer, 'road') > 0
+
+        if (canPlaceRoad) {
+          button.classList.add('board-slot-target')
+        }
+
+        if (isOwned) {
+          button.style.background = slot.ownerColor || '#9ca3af'
+          button.style.borderColor = slot.ownerColor || '#6b7280'
+        }
+
+        button.title = isOwned ? 'Road occupied' : canPlaceRoad ? 'Place road here' : 'Empty road slot'
+        button.disabled = !canPlaceRoad
+        button.addEventListener('click', () => {
+          if (!canPlaceRoad) {
+            return
+          }
+          handlePlacePiece('road', 'road', slot.id)
+        })
+        boardRoadSlots.appendChild(button)
+      })
+
+      boardPointSlots.innerHTML = ''
+      board.points.forEach((slot) => {
+        const button = document.createElement('button')
+        button.type = 'button'
+        button.className = `board-slot board-slot-point p${slot.id}`
+
+        const isFree = !slot.ownerId
+        const isOwnSettlement = slot.ownerId === currentPlayer?.id && slot.pieceType === 'settlement'
+        const canPlaceSettlement = Boolean(currentPlayer) && !state.setupMode && selectedPlacementPiece === 'settlement' && !actionInFlight && isFree && getPieceCount(currentPlayer, 'settlement') > 0
+        const canUpgradeCity = Boolean(currentPlayer) && !state.setupMode && selectedPlacementPiece === 'city' && !actionInFlight && isOwnSettlement && getPieceCount(currentPlayer, 'city') > 0
+        const canUsePoint = canPlaceSettlement || canUpgradeCity
+
+        if (canUsePoint) {
+          button.classList.add('board-slot-target')
+        }
+
+        if (!isFree) {
+          button.style.background = slot.ownerColor || '#9ca3af'
+          button.style.borderColor = slot.ownerColor || '#6b7280'
+          button.textContent = slot.pieceType === 'city' ? '🏰' : '🏠'
+          button.style.color = '#ffffff'
+        } else {
+          button.textContent = '+'
+          button.style.color = canUsePoint ? currentPlayerColor : '#334155'
+        }
+
+        if (slot.pieceType === 'city') {
+          button.title = 'City occupied'
+        } else if (slot.pieceType === 'settlement') {
+          button.title = canUpgradeCity ? 'Upgrade this settlement to a city' : 'Settlement occupied'
+        } else {
+          button.title = canPlaceSettlement ? 'Place settlement here' : 'Empty point slot'
+        }
+
+        button.disabled = !canUsePoint
+        button.addEventListener('click', () => {
+          if (!canUsePoint) {
+            return
+          }
+
+          if (canPlaceSettlement) {
+            handlePlacePiece('settlement', 'point', slot.id)
+            return
+          }
+
+          if (canUpgradeCity) {
+            handlePlacePiece('city', 'point', slot.id)
+          }
+        })
+        boardPointSlots.appendChild(button)
+      })
+    }
+
     function render() {
       const currentPlayer = getCurrentPlayer()
       const bank = state.bank || { resources: {}, developmentCards: {} }
       const playerResourcesForHand = currentPlayer?.resources || {}
+
+      if (!currentPlayer) {
+        selectedPlacementPiece = null
+      } else if (selectedPlacementPiece && getPieceCount(currentPlayer, selectedPlacementPiece) <= 0) {
+        selectedPlacementPiece = null
+      }
 
       playerNameBar.textContent = currentPlayer
         ? `Your name: ${currentPlayerName}`
@@ -541,17 +795,30 @@
 
       handPieces.innerHTML = ''
       ;[
-        { key: 'roads', icon: '🛣️', label: 'Roads' },
-        { key: 'settlements', icon: '🏠', label: 'Settlements' },
-        { key: 'cities', icon: '🏰', label: 'Cities' }
+        { key: 'road', icon: '🛣️', label: 'Roads' },
+        { key: 'settlement', icon: '🏠', label: 'Settlements' },
+        { key: 'city', icon: '🏰', label: 'Cities' }
       ].forEach((entry) => {
-        const count = currentPlayer ? Number(currentPlayer[entry.key] || 0) : 0
-        const item = document.createElement('span')
-        item.className = 'hand-chip'
-        item.title = entry.label
-        item.textContent = `${entry.icon} ×${count}`
-        handPieces.appendChild(item)
+        const count = getPieceCount(currentPlayer, entry.key)
+        const button = document.createElement('button')
+        button.type = 'button'
+        button.className = 'hand-chip hand-chip-action'
+        if (selectedPlacementPiece === entry.key) {
+          button.classList.add('hand-chip-selected')
+        }
+        button.title = `Select ${entry.label}`
+        button.textContent = `${entry.icon} ×${count}`
+        button.disabled = !currentPlayer || count <= 0 || actionInFlight || Boolean(state.setupMode)
+        button.addEventListener('click', () => {
+          if (!currentPlayer || count <= 0) {
+            return
+          }
+          toggleSelectedPiece(entry.key)
+        })
+        handPieces.appendChild(button)
       })
+
+      renderBoardPlacementSlots(currentPlayer)
 
       playerResources.innerHTML = ''
       ;[
@@ -727,6 +994,13 @@
       longestRoadButton.disabled = !controlsEnabled
       largestArmyButton.disabled = !controlsEnabled
       undoButton.disabled = !controlsEnabled
+
+      roadButton.classList.toggle('btn-light', selectedPlacementPiece === 'road')
+      roadButton.classList.toggle('btn-info', selectedPlacementPiece !== 'road')
+      settlementButton.classList.toggle('btn-light', selectedPlacementPiece === 'settlement')
+      settlementButton.classList.toggle('btn-warning', selectedPlacementPiece !== 'settlement')
+      cityButton.classList.toggle('btn-light', selectedPlacementPiece === 'city')
+      cityButton.classList.toggle('btn-danger', selectedPlacementPiece !== 'city')
     }
 
     function savePlayerIdentity(playerId, name) {
@@ -913,12 +1187,7 @@
         return
       }
 
-      await runAction(async () => {
-        const data = await requestJson('/build-road', { playerId: currentPlayerId, playerName: currentPlayerName })
-        if (data) {
-          state = data.state
-        }
-      })
+      toggleSelectedPiece('road')
     })
 
     settlementButton.addEventListener('click', async () => {
@@ -926,12 +1195,7 @@
         return
       }
 
-      await runAction(async () => {
-        const data = await requestJson('/build-settlement', { playerId: currentPlayerId, playerName: currentPlayerName })
-        if (data) {
-          state = data.state
-        }
-      })
+      toggleSelectedPiece('settlement')
     })
 
     cityButton.addEventListener('click', async () => {
@@ -939,12 +1203,7 @@
         return
       }
 
-      await runAction(async () => {
-        const data = await requestJson('/build-city', { playerId: currentPlayerId, playerName: currentPlayerName })
-        if (data) {
-          state = data.state
-        }
-      })
+      toggleSelectedPiece('city')
     })
 
     longestRoadButton.addEventListener('click', async () => {
