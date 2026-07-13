@@ -189,6 +189,48 @@
       cursor: pointer;
     }
 
+    .hand-group {
+      margin-top: 12px;
+    }
+
+    .hand-group-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #374151;
+      margin-bottom: 8px;
+    }
+
+    .hand-chip-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .hand-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #1e40af;
+      font-size: 0.78rem;
+      font-weight: 700;
+      border: none;
+      line-height: 1;
+    }
+
+    .hand-chip-action:hover:not(:disabled) {
+      background: #dbeafe;
+      cursor: pointer;
+    }
+
+    .hand-chip:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
     .dev-card-section {
       margin-top: 12px;
       padding-top: 10px;
@@ -364,15 +406,17 @@
   <div class="layout">
     <aside class="panel">
       <h3>Hand</h3>
-      <div class="resource-list">
-        <div class="resource-item"><span>Settlements</span><strong id="settlementCount">5</strong></div>
-        <div class="resource-item"><span>Roads</span><strong id="roadCount">15</strong></div>
-        <div class="resource-item"><span>Cities</span><strong id="cityCount">4</strong></div>
+      <div class="hand-group">
+        <div class="hand-group-title">Pieces</div>
+        <div id="handPieces" class="hand-chip-list"></div>
       </div>
-      <div id="playerResources" class="resource-list"></div>
+      <div class="hand-group">
+        <div class="hand-group-title">Resources</div>
+        <div id="playerResources" class="hand-chip-list"></div>
+      </div>
       <div class="dev-card-section">
         <div class="dev-card-section-title">Hidden Dev Cards</div>
-        <div id="hiddenDevelopmentCards" class="resource-list"></div>
+        <div id="hiddenDevelopmentCards" class="hand-chip-list"></div>
       </div>
     </aside>
 
@@ -426,9 +470,7 @@
     let actionInFlight = false
 
     const playerNameBar = document.getElementById('playerNameBar')
-    const settlementCount = document.getElementById('settlementCount')
-    const roadCount = document.getElementById('roadCount')
-    const cityCount = document.getElementById('cityCount')
+    const handPieces = document.getElementById('handPieces')
     const playerResources = document.getElementById('playerResources')
     const hiddenDevelopmentCards = document.getElementById('hiddenDevelopmentCards')
     const bankResources = document.getElementById('bankResources')
@@ -497,44 +539,55 @@
         ? `Your name: ${currentPlayerName}`
         : 'Your name: Waiting for player name...'
 
-      if (currentPlayer) {
-        settlementCount.textContent = currentPlayer.settlements
-        roadCount.textContent = currentPlayer.roads
-        cityCount.textContent = currentPlayer.cities
-      } else {
-        settlementCount.textContent = '5'
-        roadCount.textContent = '15'
-        cityCount.textContent = '4'
-      }
+      handPieces.innerHTML = ''
+      ;[
+        { key: 'roads', icon: '🛣️', label: 'Roads' },
+        { key: 'settlements', icon: '🏠', label: 'Settlements' },
+        { key: 'cities', icon: '🏰', label: 'Cities' }
+      ].forEach((entry) => {
+        const count = currentPlayer ? Number(currentPlayer[entry.key] || 0) : 0
+        const item = document.createElement('span')
+        item.className = 'hand-chip'
+        item.title = entry.label
+        item.textContent = `${entry.icon} ×${count}`
+        handPieces.appendChild(item)
+      })
 
       playerResources.innerHTML = ''
-      ;['Wheat', 'Sheep', 'Ore', 'Wood', 'Brick'].forEach((resource) => {
-        const count = currentPlayer ? (playerResourcesForHand[resource] || 0) : 0
+      ;[
+        { key: 'Wheat', icon: '🌾' },
+        { key: 'Sheep', icon: '🐑' },
+        { key: 'Ore', icon: '⛰️' },
+        { key: 'Wood', icon: '🌲' },
+        { key: 'Brick', icon: '🧱' }
+      ].forEach((resource) => {
+        const count = currentPlayer ? (playerResourcesForHand[resource.key] || 0) : 0
         if (!currentPlayer || count <= 0) {
           return
         }
 
         const button = document.createElement('button')
         button.type = 'button'
-        button.className = 'resource-item'
-        button.innerHTML = `<span style="color:${resourceColors[resource]}; font-weight:700;">${resource}</span><strong>${count}</strong>`
+        button.className = 'hand-chip hand-chip-action'
+        button.textContent = `${resource.icon} ${resource.key} ×${count}`
         button.disabled = !currentPlayer || count <= 0 || actionInFlight
-        button.title = count > 0 ? `Return 1 ${resource} to the bank` : `No ${resource}`
+        button.title = count > 0 ? `Return 1 ${resource.key} to the bank` : `No ${resource.key}`
         button.addEventListener('click', () => {
           if (!currentPlayer) {
             return
           }
-          handleReturnResource(resource)
+          handleReturnResource(resource.key)
         })
         playerResources.appendChild(button)
       })
 
       hiddenDevelopmentCards.innerHTML = ''
       ;[
-        { key: 'knights', label: 'Knight' },
-        { key: 'monopoly', label: 'Monopoly' },
-        { key: 'roadBuilding', label: 'Road Building' },
-        { key: 'yearOfPlenty', label: 'Year of Plenty' }
+        { key: 'knights', label: 'Knight', icon: '⚔️', playable: true },
+        { key: 'victoryPoints', label: 'Victory Point', icon: '⭐', playable: false },
+        { key: 'monopoly', label: 'Monopoly', icon: '⛓️', playable: true },
+        { key: 'roadBuilding', label: 'Road Building', icon: '🛣️', playable: true },
+        { key: 'yearOfPlenty', label: 'Year of Plenty', icon: '🌾', playable: true }
       ].forEach((entry) => {
         const count = currentPlayer ? (currentPlayer.developmentCards?.[entry.key] || 0) : 0
         if (!currentPlayer || count <= 0) {
@@ -543,12 +596,12 @@
 
         const button = document.createElement('button')
         button.type = 'button'
-        button.className = 'resource-item dev-card-button'
-        button.innerHTML = `<span>${entry.label}</span>`
-        button.disabled = !currentPlayer || count <= 0 || actionInFlight || Boolean(state.setupMode)
-        button.title = `Play ${entry.label}`
+        button.className = 'hand-chip hand-chip-action'
+        button.textContent = `${entry.icon} ${entry.label} ×${count}`
+        button.disabled = !currentPlayer || count <= 0 || actionInFlight || Boolean(state.setupMode) || !entry.playable
+        button.title = entry.playable ? `Play ${entry.label}` : `${entry.label} remains hidden until game end`
         button.addEventListener('click', () => {
-          if (!currentPlayer) {
+          if (!currentPlayer || !entry.playable) {
             return
           }
           handlePlayDevelopmentCard(entry.key)
