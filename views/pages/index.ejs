@@ -341,26 +341,12 @@
       border-radius: 999px;
     }
 
-    .board-slot-road.r0 { left: 45%; top: 29%; }
-    .board-slot-road.r1 { left: 58%; top: 40%; transform: rotate(60deg); }
-    .board-slot-road.r2 { left: 58%; top: 56%; transform: rotate(-60deg); }
-    .board-slot-road.r3 { left: 45%; top: 67%; }
-    .board-slot-road.r4 { left: 31%; top: 56%; transform: rotate(60deg); }
-    .board-slot-road.r5 { left: 31%; top: 40%; transform: rotate(-60deg); }
-
     .board-slot-point {
       width: 26px;
       height: 26px;
       border-radius: 999px;
       font-size: 0.72rem;
     }
-
-    .board-slot-point.p0 { left: 39%; top: 24%; }
-    .board-slot-point.p1 { left: 55%; top: 24%; }
-    .board-slot-point.p2 { left: 64%; top: 48%; }
-    .board-slot-point.p3 { left: 55%; top: 70%; }
-    .board-slot-point.p4 { left: 39%; top: 70%; }
-    .board-slot-point.p5 { left: 30%; top: 48%; }
 
     .resource-list {
       display: flex;
@@ -769,34 +755,87 @@
       })
     }
 
+    function getBoardGeometry() {
+      const wrapperRect = boardSuggestionLayer.getBoundingClientRect()
+      const hexNodes = boardHexMap.querySelectorAll('.board-hex')
+      const centerHex = hexNodes[9] || hexNodes[Math.floor(hexNodes.length / 2)] || null
+
+      if (!centerHex) {
+        return null
+      }
+
+      const centerRect = centerHex.getBoundingClientRect()
+      const centerX = centerRect.left - wrapperRect.left + (centerRect.width / 2)
+      const centerY = centerRect.top - wrapperRect.top + (centerRect.height / 2)
+      const size = Math.min(centerRect.width, centerRect.height)
+
+      return {
+        wrapperRect,
+        hexNodes,
+        centerX,
+        centerY,
+        pointRadius: size * 0.5,
+        roadRadius: size * 0.37,
+        pointAngles: [-90, -30, 30, 90, 150, 210],
+        roadAngles: [-30, 30, 90, 150, 210, 270]
+      }
+    }
+
+    function normalizeRoadAngle(angle) {
+      let normalized = angle % 180
+      if (normalized < 0) {
+        normalized += 180
+      }
+      return normalized
+    }
+
+    function hasNearbyPoint(points, x, y) {
+      return points.some((point) => {
+        const dx = point.x - x
+        const dy = point.y - y
+        return Math.hypot(dx, dy) < 8
+      })
+    }
+
+    function hasNearbyRoad(roads, x, y, angle) {
+      const normalizedAngle = normalizeRoadAngle(angle)
+      return roads.some((road) => {
+        const dx = road.x - x
+        const dy = road.y - y
+        const closeBy = Math.hypot(dx, dy) < 10
+        const angleDiff = Math.abs(road.angle - normalizedAngle)
+        const aligned = Math.min(angleDiff, 180 - angleDiff) < 12
+        return closeBy && aligned
+      })
+    }
+
     function renderPlacementSuggestions() {
       boardSuggestionLayer.innerHTML = ''
 
-      const wrapperRect = boardSuggestionLayer.getBoundingClientRect()
-      const hexNodes = boardHexMap.querySelectorAll('.board-hex')
-      const pointAngles = [-90, -30, 30, 90, 150, 210]
-      const roadAngles = [-60, 0, 60, 120, 180, 240]
-      const usedPointSlots = new Set()
-      const usedRoadSlots = new Set()
+      const geometry = getBoardGeometry()
+      if (!geometry) {
+        return
+      }
+
+      const { wrapperRect, hexNodes, pointAngles, roadAngles, pointRadius, roadRadius } = geometry
+      const uniquePoints = []
+      const uniqueRoads = []
 
       hexNodes.forEach((hexNode) => {
         const rect = hexNode.getBoundingClientRect()
         const centerX = rect.left - wrapperRect.left + (rect.width / 2)
         const centerY = rect.top - wrapperRect.top + (rect.height / 2)
-        const size = Math.min(rect.width, rect.height)
-        const pointRadius = size * 0.5
-        const roadRadius = size * 0.37
 
         pointAngles.forEach((angle) => {
           const radians = (angle * Math.PI) / 180
           const x = centerX + (Math.cos(radians) * pointRadius)
           const y = centerY + (Math.sin(radians) * pointRadius)
-          const key = `${Math.round(x / 8)}:${Math.round(y / 8)}`
 
-          if (usedPointSlots.has(key)) {
+          if (hasNearbyPoint(uniquePoints, x, y)) {
             return
           }
-          usedPointSlots.add(key)
+
+          uniquePoints.push({ x, y })
 
           const marker = document.createElement('span')
           marker.className = 'placement-suggestion placement-suggestion-point'
@@ -809,12 +848,12 @@
           const radians = (angle * Math.PI) / 180
           const x = centerX + (Math.cos(radians) * roadRadius)
           const y = centerY + (Math.sin(radians) * roadRadius)
-          const key = `${Math.round(x / 8)}:${Math.round(y / 8)}:${Math.round(angle / 15)}`
 
-          if (usedRoadSlots.has(key)) {
+          if (hasNearbyRoad(uniqueRoads, x, y, angle)) {
             return
           }
-          usedRoadSlots.add(key)
+
+          uniqueRoads.push({ x, y, angle: normalizeRoadAngle(angle) })
 
           const marker = document.createElement('span')
           marker.className = 'placement-suggestion placement-suggestion-road'
@@ -924,14 +963,28 @@
     function renderBoardPlacementSlots(currentPlayer) {
       const board = state.board || { roads: [], points: [] }
       const currentPlayerColor = currentPlayer?.color || '#1f2937'
+      const geometry = getBoardGeometry()
 
       boardRoadSlots.innerHTML = ''
       board.points = Array.isArray(board.points) ? board.points : []
 
+      if (!geometry) {
+        return
+      }
+
+      const { centerX, centerY, pointAngles, roadAngles, pointRadius, roadRadius } = geometry
+
       ;(Array.isArray(board.roads) ? board.roads : []).forEach((slot) => {
         const button = document.createElement('button')
         button.type = 'button'
-        button.className = `board-slot board-slot-road r${slot.id}`
+        button.className = 'board-slot board-slot-road'
+        const roadAngle = roadAngles[slot.id] || 0
+        const roadRadians = (roadAngle * Math.PI) / 180
+        const roadX = centerX + (Math.cos(roadRadians) * roadRadius)
+        const roadY = centerY + (Math.sin(roadRadians) * roadRadius)
+        button.style.left = `${roadX}px`
+        button.style.top = `${roadY}px`
+        button.style.transform = `translate(-50%, -50%) rotate(${roadAngle}deg)`
         const isOwned = Boolean(slot.ownerId)
         const canPlaceRoad = Boolean(currentPlayer) && !state.winner && selectedPlacementPiece === 'road' && !actionInFlight && !isOwned && getPieceCount(currentPlayer, 'road') > 0
 
@@ -958,7 +1011,14 @@
       board.points.forEach((slot) => {
         const button = document.createElement('button')
         button.type = 'button'
-        button.className = `board-slot board-slot-point p${slot.id}`
+        button.className = 'board-slot board-slot-point'
+        const pointAngle = pointAngles[slot.id] || 0
+        const pointRadians = (pointAngle * Math.PI) / 180
+        const pointX = centerX + (Math.cos(pointRadians) * pointRadius)
+        const pointY = centerY + (Math.sin(pointRadians) * pointRadius)
+        button.style.left = `${pointX}px`
+        button.style.top = `${pointY}px`
+        button.style.transform = 'translate(-50%, -50%)'
 
         const isFree = !slot.ownerId
         const isOwnSettlement = slot.ownerId === currentPlayer?.id && slot.pieceType === 'settlement'
