@@ -24,6 +24,14 @@ const boardTileDistribution = [
   'Desert'
 ]
 const boardPipDistribution = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12]
+const boardCornerOffsets = [
+  { x: 1, y: 1, z: -2 },
+  { x: 2, y: -1, z: -1 },
+  { x: 1, y: -2, z: 1 },
+  { x: -1, y: -1, z: 2 },
+  { x: -2, y: 1, z: 1 },
+  { x: -1, y: 2, z: -1 }
+]
 const developmentCardTypes = [
   { key: 'knights', name: 'Knight' },
   { key: 'victoryPoints', name: 'Victory Point' },
@@ -63,21 +71,100 @@ let boardRoads = []
 let boardPoints = []
 let boardHexes = []
 
-function createEmptyBoardRoads() {
-  return Array.from({ length: 6 }, (_, id) => ({
-    id,
-    ownerId: null,
-    ownerColor: null
-  }))
+function createBoardLayoutHexes() {
+  const layout = []
+  let id = 0
+
+  for (let r = -2; r <= 2; r += 1) {
+    const qMin = Math.max(-2, -r - 2)
+    const qMax = Math.min(2, -r + 2)
+
+    for (let q = qMin; q <= qMax; q += 1) {
+      layout.push({ id: id++, q, r })
+    }
+  }
+
+  return layout
 }
 
-function createEmptyBoardPoints() {
-  return Array.from({ length: 6 }, (_, id) => ({
-    id,
-    ownerId: null,
-    ownerColor: null,
-    pieceType: null
-  }))
+function getCornerKey(x2, y2, z2) {
+  return `${x2}:${y2}:${z2}`
+}
+
+function createBoardNetwork() {
+  const layoutHexes = createBoardLayoutHexes()
+  const pointsByKey = new Map()
+  const roadsByKey = new Map()
+  const points = []
+  const roads = []
+
+  const hexes = layoutHexes.map((hex) => {
+    const x = hex.q
+    const z = hex.r
+    const y = -x - z
+
+    const pointIds = boardCornerOffsets.map((offset) => {
+      const x2 = (x * 2) + offset.x
+      const y2 = (y * 2) + offset.y
+      const z2 = (z * 2) + offset.z
+      const key = getCornerKey(x2, y2, z2)
+
+      if (!pointsByKey.has(key)) {
+        const id = points.length
+        pointsByKey.set(key, id)
+        points.push({
+          id,
+          x2,
+          y2,
+          z2,
+          ownerId: null,
+          ownerColor: null,
+          pieceType: null
+        })
+      }
+
+      return pointsByKey.get(key)
+    })
+
+    const roadIds = []
+    for (let index = 0; index < pointIds.length; index += 1) {
+      const first = pointIds[index]
+      const second = pointIds[(index + 1) % pointIds.length]
+      const pointA = Math.min(first, second)
+      const pointB = Math.max(first, second)
+      const edgeKey = `${pointA}:${pointB}`
+
+      if (!roadsByKey.has(edgeKey)) {
+        const id = roads.length
+        roadsByKey.set(edgeKey, id)
+        roads.push({
+          id,
+          pointA,
+          pointB,
+          ownerId: null,
+          ownerColor: null
+        })
+      }
+
+      roadIds.push(roadsByKey.get(edgeKey))
+    }
+
+    return {
+      id: hex.id,
+      q: hex.q,
+      r: hex.r,
+      resource: null,
+      pip: null,
+      pointIds,
+      roadIds
+    }
+  })
+
+  return {
+    points,
+    roads,
+    hexes
+  }
 }
 
 function shuffle(list) {
@@ -109,7 +196,7 @@ function randomizeBoardResources() {
   const pipsByHexId = Array.from({ length: 19 }, (_, id) => boardHexes[id]?.pip ?? null)
 
   boardHexes = shuffledTiles.map((resource, id) => ({
-    id,
+    ...boardHexes[id],
     resource,
     pip: resource === 'Desert' ? null : pipsByHexId[id]
   }))
@@ -129,9 +216,17 @@ function randomizeBoardPips() {
 }
 
 function initializeBoardHexes() {
+  const base = createBoardNetwork()
+  boardPoints = base.points
+  boardRoads = base.roads
+
   const shuffledTiles = shuffle(boardTileDistribution)
   const shuffledPips = shuffle(boardPipDistribution)
-  boardHexes = buildBoardHexes(shuffledTiles, shuffledPips)
+  boardHexes = buildBoardHexes(shuffledTiles, shuffledPips).map((hex, id) => ({
+    ...base.hexes[id],
+    resource: hex.resource,
+    pip: hex.pip
+  }))
 }
 
 function addEvent(message) {
@@ -236,9 +331,13 @@ function restoreSnapshot(snapshot) {
   boardPip = snapshot.boardPip
   longestRoadPlayerId = snapshot.longestRoadPlayerId
   largestArmyPlayerId = snapshot.largestArmyPlayerId
-  boardRoads = (snapshot.boardRoads || []).map((slot) => ({ ...slot }))
-  boardPoints = (snapshot.boardPoints || []).map((slot) => ({ ...slot }))
-  boardHexes = (snapshot.boardHexes || []).map((hex) => ({ ...hex }))
+  if (snapshot.boardRoads && snapshot.boardPoints && snapshot.boardHexes) {
+    boardRoads = snapshot.boardRoads.map((slot) => ({ ...slot }))
+    boardPoints = snapshot.boardPoints.map((slot) => ({ ...slot }))
+    boardHexes = snapshot.boardHexes.map((hex) => ({ ...hex }))
+  } else {
+    initializeBoardHexes()
+  }
   Object.keys(bankResources).forEach((resource) => {
     bankResources[resource] = snapshot.bankResources[resource]
   })
@@ -260,8 +359,6 @@ function resetGameState() {
   boardPip = null
   longestRoadPlayerId = null
   largestArmyPlayerId = null
-  boardRoads = createEmptyBoardRoads()
-  boardPoints = createEmptyBoardPoints()
   initializeBoardHexes()
   nextPlayerId = 1
   Object.keys(bankResources).forEach((resource) => {
@@ -340,8 +437,9 @@ function chooseDevelopmentCard() {
 }
 
 function initializeBoardState() {
-  boardRoads = createEmptyBoardRoads()
-  boardPoints = createEmptyBoardPoints()
+  const base = createBoardNetwork()
+  boardRoads = base.roads
+  boardPoints = base.points
 }
 
 function syncSetupModeWithPhase() {
@@ -689,7 +787,7 @@ app
       return res.status(404).json({ error: 'Player not found.' })
     }
 
-    if (!Number.isInteger(targetId) || targetId < 0 || targetId > 5) {
+    if (!Number.isInteger(targetId) || targetId < 0) {
       return res.status(400).json({ error: 'That board location is invalid.' })
     }
 
@@ -709,7 +807,11 @@ app
       }
 
       const slot = boardRoads.find((entry) => entry.id === targetId)
-      if (!slot || slot.ownerId) {
+      if (!slot) {
+        return res.status(400).json({ error: 'That road slot does not exist.' })
+      }
+
+      if (slot.ownerId) {
         return res.status(400).json({ error: 'That road slot is already occupied.' })
       }
 
@@ -733,7 +835,11 @@ app
       }
 
       const slot = boardPoints.find((entry) => entry.id === targetId)
-      if (!slot || slot.ownerId) {
+      if (!slot) {
+        return res.status(400).json({ error: 'That point slot does not exist.' })
+      }
+
+      if (slot.ownerId) {
         return res.status(400).json({ error: 'That point slot is already occupied.' })
       }
 

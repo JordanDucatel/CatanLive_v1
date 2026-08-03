@@ -243,26 +243,16 @@
     }
 
     .board-map {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    .board-row {
-      display: flex;
-      justify-content: center;
-      margin-top: -22px;
-    }
-
-    .board-row:first-child {
-      margin-top: 0;
+      position: relative;
+      width: 100%;
+      height: 100%;
     }
 
     .board-hex {
       width: 102px;
       height: 112px;
-      margin-left: -4px;
-      margin-right: -4px;
+      position: absolute;
+      transform: translate(-50%, -50%);
       clip-path: polygon(50% 2.5%, 95% 25%, 95% 75%, 50% 97.5%, 5% 75%, 5% 25%);
       border: 2px solid rgba(15, 23, 42, 0.3);
       box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
@@ -580,8 +570,6 @@
       .board-hex {
         width: 82px;
         height: 90px;
-        margin-left: -5px;
-        margin-right: -5px;
       }
 
       .board-hex-name {
@@ -723,145 +711,164 @@
     }
 
     function renderBoardHexMap() {
-      const countsPerRow = [3, 4, 5, 4, 3]
       const boardHexes = Array.isArray(state.board?.hexes) ? state.board.hexes : []
+      const model = buildBoardRenderModel()
+
+      if (!model) {
+        return
+      }
 
       boardHexMap.innerHTML = ''
-      let index = 0
 
-      countsPerRow.forEach((count) => {
-        const row = document.createElement('div')
-        row.className = 'board-row'
+      ;[boardHexMap, boardSuggestionLayer, boardRoadSlots, boardPointSlots].forEach((layer) => {
+        layer.style.width = `${model.width}px`
+        layer.style.height = `${model.height}px`
+      })
 
-        for (let column = 0; column < count; column += 1) {
-          const hex = boardHexes[index] || { resource: null, pip: null }
-          index += 1
+      boardHexes.forEach((hex) => {
+        const tile = document.createElement('div')
+        tile.className = 'board-hex'
 
-          const tile = document.createElement('div')
-          tile.className = 'board-hex'
-
-          const resourceName = hex.resource || 'Unknown'
-          if (resourceName === 'Desert') {
-            tile.classList.add('board-hex-desert')
-          }
-
-          tile.style.background = resourceColors[resourceName] || '#f8fafc'
-          const pipText = hex.pip === null || hex.pip === undefined ? '-' : String(hex.pip)
-          tile.innerHTML = `<span class="board-hex-name">${resourceName}</span><span class="board-hex-pip">${pipText}</span>`
-          row.appendChild(tile)
+        const position = model.hexMap.get(hex.id)
+        if (!position) {
+          return
         }
 
-        boardHexMap.appendChild(row)
+        tile.style.left = `${position.x}px`
+        tile.style.top = `${position.y}px`
+
+        const resourceName = hex.resource || 'Unknown'
+        if (resourceName === 'Desert') {
+          tile.classList.add('board-hex-desert')
+        }
+
+        tile.style.background = resourceColors[resourceName] || '#f8fafc'
+        const pipText = hex.pip === null || hex.pip === undefined ? '-' : String(hex.pip)
+        tile.innerHTML = `<span class="board-hex-name">${resourceName}</span><span class="board-hex-pip">${pipText}</span>`
+        boardHexMap.appendChild(tile)
       })
     }
 
-    function getBoardGeometry() {
-      const wrapperRect = boardSuggestionLayer.getBoundingClientRect()
-      const hexNodes = boardHexMap.querySelectorAll('.board-hex')
-      const centerHex = hexNodes[9] || hexNodes[Math.floor(hexNodes.length / 2)] || null
+    function buildBoardRenderModel() {
+      const board = state.board || { hexes: [], points: [], roads: [] }
+      const hexes = Array.isArray(board.hexes) ? board.hexes : []
+      const points = Array.isArray(board.points) ? board.points : []
+      const roads = Array.isArray(board.roads) ? board.roads : []
 
-      if (!centerHex) {
-        return null
-      }
+      const hexSize = 40
+      const pointyX = Math.sqrt(3) * hexSize
+      const pointyY = 1.5 * hexSize
 
-      const centerRect = centerHex.getBoundingClientRect()
-      const centerX = centerRect.left - wrapperRect.left + (centerRect.width / 2)
-      const centerY = centerRect.top - wrapperRect.top + (centerRect.height / 2)
-      const size = Math.min(centerRect.width, centerRect.height)
+      const hexCenters = hexes.map((hex) => {
+        const x = pointyX * ((hex.q || 0) + ((hex.r || 0) / 2))
+        const y = pointyY * (hex.r || 0)
+        return {
+          id: hex.id,
+          x,
+          y
+        }
+      })
+
+      const pointPositionsRaw = points.map((point) => {
+        const x = pointyX * ((point.x2 || 0) / 2 + (point.z2 || 0) / 4)
+        const y = pointyY * ((point.z2 || 0) / 2)
+        return {
+          id: point.id,
+          x,
+          y
+        }
+      })
+
+      const allX = [...hexCenters.map((entry) => entry.x), ...pointPositionsRaw.map((entry) => entry.x)]
+      const allY = [...hexCenters.map((entry) => entry.y), ...pointPositionsRaw.map((entry) => entry.y)]
+
+      const minX = Math.min(...allX)
+      const maxX = Math.max(...allX)
+      const minY = Math.min(...allY)
+      const maxY = Math.max(...allY)
+      const padding = 46
+      const width = Math.ceil((maxX - minX) + (padding * 2))
+      const height = Math.ceil((maxY - minY) + (padding * 2))
+
+      const normalizeX = (x) => x - minX + padding
+      const normalizeY = (y) => y - minY + padding
+
+      const hexMap = new Map()
+      hexCenters.forEach((entry) => {
+        hexMap.set(entry.id, {
+          x: normalizeX(entry.x),
+          y: normalizeY(entry.y)
+        })
+      })
+
+      const pointMap = new Map()
+      pointPositionsRaw.forEach((entry) => {
+        pointMap.set(entry.id, {
+          x: normalizeX(entry.x),
+          y: normalizeY(entry.y)
+        })
+      })
+
+      const roadMap = new Map()
+      roads.forEach((road) => {
+        const first = pointMap.get(road.pointA)
+        const second = pointMap.get(road.pointB)
+        if (!first || !second) {
+          return
+        }
+
+        const x = (first.x + second.x) / 2
+        const y = (first.y + second.y) / 2
+        const angle = Math.atan2(second.y - first.y, second.x - first.x) * (180 / Math.PI)
+
+        roadMap.set(road.id, { x, y, angle })
+      })
 
       return {
-        wrapperRect,
-        hexNodes,
-        centerX,
-        centerY,
-        pointRadius: size * 0.5,
-        roadRadius: size * 0.37,
-        pointAngles: [-90, -30, 30, 90, 150, 210],
-        roadAngles: [-30, 30, 90, 150, 210, 270]
+        width,
+        height,
+        hexMap,
+        pointMap,
+        roadMap
       }
-    }
-
-    function normalizeRoadAngle(angle) {
-      let normalized = angle % 180
-      if (normalized < 0) {
-        normalized += 180
-      }
-      return normalized
-    }
-
-    function hasNearbyPoint(points, x, y) {
-      return points.some((point) => {
-        const dx = point.x - x
-        const dy = point.y - y
-        return Math.hypot(dx, dy) < 8
-      })
-    }
-
-    function hasNearbyRoad(roads, x, y, angle) {
-      const normalizedAngle = normalizeRoadAngle(angle)
-      return roads.some((road) => {
-        const dx = road.x - x
-        const dy = road.y - y
-        const closeBy = Math.hypot(dx, dy) < 10
-        const angleDiff = Math.abs(road.angle - normalizedAngle)
-        const aligned = Math.min(angleDiff, 180 - angleDiff) < 12
-        return closeBy && aligned
-      })
     }
 
     function renderPlacementSuggestions() {
       boardSuggestionLayer.innerHTML = ''
-
-      const geometry = getBoardGeometry()
-      if (!geometry) {
+      const model = buildBoardRenderModel()
+      if (!model) {
         return
       }
 
-      const { wrapperRect, hexNodes, pointAngles, roadAngles, pointRadius, roadRadius } = geometry
-      const uniquePoints = []
-      const uniqueRoads = []
+      const board = state.board || { points: [], roads: [] }
+      const points = Array.isArray(board.points) ? board.points : []
+      const roads = Array.isArray(board.roads) ? board.roads : []
 
-      hexNodes.forEach((hexNode) => {
-        const rect = hexNode.getBoundingClientRect()
-        const centerX = rect.left - wrapperRect.left + (rect.width / 2)
-        const centerY = rect.top - wrapperRect.top + (rect.height / 2)
+      points.forEach((point) => {
+        const position = model.pointMap.get(point.id)
+        if (!position) {
+          return
+        }
 
-        pointAngles.forEach((angle) => {
-          const radians = (angle * Math.PI) / 180
-          const x = centerX + (Math.cos(radians) * pointRadius)
-          const y = centerY + (Math.sin(radians) * pointRadius)
+        const marker = document.createElement('span')
+        marker.className = 'placement-suggestion placement-suggestion-point'
+        marker.style.left = `${position.x}px`
+        marker.style.top = `${position.y}px`
+        boardSuggestionLayer.appendChild(marker)
+      })
 
-          if (hasNearbyPoint(uniquePoints, x, y)) {
-            return
-          }
+      roads.forEach((road) => {
+        const position = model.roadMap.get(road.id)
+        if (!position) {
+          return
+        }
 
-          uniquePoints.push({ x, y })
-
-          const marker = document.createElement('span')
-          marker.className = 'placement-suggestion placement-suggestion-point'
-          marker.style.left = `${x}px`
-          marker.style.top = `${y}px`
-          boardSuggestionLayer.appendChild(marker)
-        })
-
-        roadAngles.forEach((angle) => {
-          const radians = (angle * Math.PI) / 180
-          const x = centerX + (Math.cos(radians) * roadRadius)
-          const y = centerY + (Math.sin(radians) * roadRadius)
-
-          if (hasNearbyRoad(uniqueRoads, x, y, angle)) {
-            return
-          }
-
-          uniqueRoads.push({ x, y, angle: normalizeRoadAngle(angle) })
-
-          const marker = document.createElement('span')
-          marker.className = 'placement-suggestion placement-suggestion-road'
-          marker.style.left = `${x}px`
-          marker.style.top = `${y}px`
-          marker.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`
-          boardSuggestionLayer.appendChild(marker)
-        })
+        const marker = document.createElement('span')
+        marker.className = 'placement-suggestion placement-suggestion-road'
+        marker.style.left = `${position.x}px`
+        marker.style.top = `${position.y}px`
+        marker.style.transform = `translate(-50%, -50%) rotate(${position.angle}deg)`
+        boardSuggestionLayer.appendChild(marker)
       })
     }
 
@@ -963,28 +970,26 @@
     function renderBoardPlacementSlots(currentPlayer) {
       const board = state.board || { roads: [], points: [] }
       const currentPlayerColor = currentPlayer?.color || '#1f2937'
-      const geometry = getBoardGeometry()
+      const model = buildBoardRenderModel()
 
       boardRoadSlots.innerHTML = ''
       board.points = Array.isArray(board.points) ? board.points : []
 
-      if (!geometry) {
+      if (!model) {
         return
       }
-
-      const { centerX, centerY, pointAngles, roadAngles, pointRadius, roadRadius } = geometry
 
       ;(Array.isArray(board.roads) ? board.roads : []).forEach((slot) => {
         const button = document.createElement('button')
         button.type = 'button'
         button.className = 'board-slot board-slot-road'
-        const roadAngle = roadAngles[slot.id] || 0
-        const roadRadians = (roadAngle * Math.PI) / 180
-        const roadX = centerX + (Math.cos(roadRadians) * roadRadius)
-        const roadY = centerY + (Math.sin(roadRadians) * roadRadius)
-        button.style.left = `${roadX}px`
-        button.style.top = `${roadY}px`
-        button.style.transform = `translate(-50%, -50%) rotate(${roadAngle}deg)`
+        const roadPosition = model.roadMap.get(slot.id)
+        if (!roadPosition) {
+          return
+        }
+        button.style.left = `${roadPosition.x}px`
+        button.style.top = `${roadPosition.y}px`
+        button.style.transform = `translate(-50%, -50%) rotate(${roadPosition.angle}deg)`
         const isOwned = Boolean(slot.ownerId)
         const canPlaceRoad = Boolean(currentPlayer) && !state.winner && selectedPlacementPiece === 'road' && !actionInFlight && !isOwned && getPieceCount(currentPlayer, 'road') > 0
 
@@ -1012,12 +1017,12 @@
         const button = document.createElement('button')
         button.type = 'button'
         button.className = 'board-slot board-slot-point'
-        const pointAngle = pointAngles[slot.id] || 0
-        const pointRadians = (pointAngle * Math.PI) / 180
-        const pointX = centerX + (Math.cos(pointRadians) * pointRadius)
-        const pointY = centerY + (Math.sin(pointRadians) * pointRadius)
-        button.style.left = `${pointX}px`
-        button.style.top = `${pointY}px`
+        const pointPosition = model.pointMap.get(slot.id)
+        if (!pointPosition) {
+          return
+        }
+        button.style.left = `${pointPosition.x}px`
+        button.style.top = `${pointPosition.y}px`
         button.style.transform = 'translate(-50%, -50%)'
 
         const isFree = !slot.ownerId
