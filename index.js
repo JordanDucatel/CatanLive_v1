@@ -37,15 +37,19 @@ const bankDevelopmentCards = {
   yearOfPlenty: 2
 }
 const history = []
+const gamePhases = ['boardSetup', 'initialPlacement', 'play', 'endGame']
 
 let nextPlayerId = 1
 let lastRoll = null
 let lastRollBy = null
 let setupMode = true
+let gamePhase = 'boardSetup'
 let boardResource = null
 let boardPip = null
 let longestRoadPlayerId = null
 let largestArmyPlayerId = null
+let winnerPlayerId = null
+let winnerName = null
 let boardRoads = []
 let boardPoints = []
 
@@ -133,6 +137,9 @@ function captureSnapshot() {
     nextPlayerId,
     lastRoll,
     lastRollBy,
+    gamePhase,
+    winnerPlayerId,
+    winnerName,
     setupMode,
     boardResource,
     boardPip,
@@ -156,7 +163,10 @@ function restoreSnapshot(snapshot) {
   nextPlayerId = snapshot.nextPlayerId
   lastRoll = snapshot.lastRoll
   lastRollBy = snapshot.lastRollBy
-  setupMode = snapshot.setupMode
+  gamePhase = snapshot.gamePhase || 'boardSetup'
+  winnerPlayerId = snapshot.winnerPlayerId || null
+  winnerName = snapshot.winnerName || null
+  setupMode = snapshot.setupMode !== undefined ? snapshot.setupMode : gamePhase === 'boardSetup'
   boardResource = snapshot.boardResource
   boardPip = snapshot.boardPip
   longestRoadPlayerId = snapshot.longestRoadPlayerId
@@ -176,6 +186,9 @@ function resetGameState() {
   eventLog.splice(0, eventLog.length)
   lastRoll = null
   lastRollBy = null
+  gamePhase = 'boardSetup'
+  winnerPlayerId = null
+  winnerName = null
   setupMode = true
   boardResource = null
   boardPip = null
@@ -211,6 +224,11 @@ function getState() {
     eventLog: eventLog.slice(-30),
     lastRoll,
     lastRollBy,
+    gamePhase,
+    winner: winnerPlayerId ? {
+      playerId: winnerPlayerId,
+      name: winnerName
+    } : null,
     setupMode,
     boardResource,
     boardPip,
@@ -258,7 +276,28 @@ function initializeBoardState() {
   boardPoints = createEmptyBoardPoints()
 }
 
+function syncSetupModeWithPhase() {
+  setupMode = gamePhase === 'boardSetup'
+}
+
+function getPhaseLabel(phase) {
+  if (phase === 'boardSetup') {
+    return 'Board Setup'
+  }
+  if (phase === 'initialPlacement') {
+    return 'Initial Placement'
+  }
+  if (phase === 'play') {
+    return 'Play'
+  }
+  if (phase === 'endGame') {
+    return 'End Of Game'
+  }
+  return phase
+}
+
 initializeBoardState()
+syncSetupModeWithPhase()
 
 app
   .use(express.json())
@@ -480,8 +519,12 @@ app
       return res.status(404).json({ error: 'Player not found.' })
     }
 
-    if (setupMode) {
-      return res.status(400).json({ error: 'Development cards are only available when setup mode is off.' })
+    if (gamePhase !== 'play') {
+      return res.status(400).json({ error: 'Development cards are only available during the play phase.' })
+    }
+
+    if (winnerPlayerId) {
+      return res.status(400).json({ error: 'The game is over.' })
     }
 
     const { player, displayName } = resolved
@@ -506,6 +549,14 @@ app
 
     if (!resolved) {
       return res.status(404).json({ error: 'Player not found.' })
+    }
+
+    if (gamePhase !== 'play') {
+      return res.status(400).json({ error: 'Development cards can only be played during the play phase.' })
+    }
+
+    if (winnerPlayerId) {
+      return res.status(400).json({ error: 'The game is over.' })
     }
 
     if (!cardKey || !['knights', 'monopoly', 'roadBuilding', 'yearOfPlenty'].includes(cardKey)) {
@@ -574,6 +625,10 @@ app
     }
 
     const { player, displayName } = resolved
+
+    if (winnerPlayerId) {
+      return res.status(400).json({ error: 'The game is over.' })
+    }
 
     if (pieceType === 'road') {
       if (targetType !== 'road') {
@@ -660,8 +715,8 @@ app
 
     const { displayName } = resolved
 
-    if (!setupMode) {
-      return res.status(400).json({ error: 'Setup mode is disabled.' })
+    if (gamePhase !== 'boardSetup') {
+      return res.status(400).json({ error: 'Tiles can only be randomized during board setup.' })
     }
 
     const resource = resourceTypes[Math.floor(Math.random() * resourceTypes.length)]
@@ -683,8 +738,8 @@ app
 
     const { displayName } = resolved
 
-    if (!setupMode) {
-      return res.status(400).json({ error: 'Setup mode is disabled.' })
+    if (gamePhase !== 'boardSetup') {
+      return res.status(400).json({ error: 'Pips can only be randomized during board setup.' })
     }
 
     pushHistory(`${displayName} randomized the pip value.`, displayName)
@@ -700,8 +755,52 @@ app
     const actorName = resolved?.displayName || req.body?.playerName || 'A player'
 
     pushHistory(`${actorName} toggled setup mode.`, actorName)
-    setupMode = Boolean(req.body?.enabled)
-    addEvent(`${actorName} ${setupMode ? 'enabled' : 'disabled'} setup mode.`)
+    gamePhase = Boolean(req.body?.enabled) ? 'boardSetup' : 'play'
+    syncSetupModeWithPhase()
+    addEvent(`${actorName} switched the game phase to ${gamePhase === 'boardSetup' ? 'Board Setup' : 'Play'}.`)
+    winnerPlayerId = null
+    winnerName = null
+    broadcastState()
+
+    return res.json({ state: getState() })
+  })
+  .post('/set-game-phase', (req, res) => {
+    const playerId = Number(req.body?.playerId)
+    const resolved = resolvePlayer(playerId, req.body?.playerName)
+    const actorName = resolved?.displayName || req.body?.playerName || 'A player'
+    const phase = req.body?.phase
+
+    if (!gamePhases.includes(phase)) {
+      return res.status(400).json({ error: 'That game phase is invalid.' })
+    }
+
+    pushHistory(`${actorName} changed the game phase.`, actorName)
+    gamePhase = phase
+    syncSetupModeWithPhase()
+    if (gamePhase !== 'endGame') {
+      winnerPlayerId = null
+      winnerName = null
+    }
+    addEvent(`${actorName} changed the game phase to ${getPhaseLabel(phase)}.`)
+    broadcastState()
+
+    return res.json({ state: getState() })
+  })
+  .post('/declare-winner', (req, res) => {
+    const playerId = Number(req.body?.playerId)
+    const resolved = resolvePlayer(playerId, req.body?.playerName)
+
+    if (!resolved) {
+      return res.status(404).json({ error: 'Player not found.' })
+    }
+
+    const { player, displayName } = resolved
+    pushHistory(`${displayName} declared victory.`, displayName)
+    winnerPlayerId = player.id
+    winnerName = displayName
+    gamePhase = 'endGame'
+    syncSetupModeWithPhase()
+    addEvent(`${displayName} won the game!`)
     broadcastState()
 
     return res.json({ state: getState() })
