@@ -215,6 +215,33 @@
       padding-bottom: 18px;
     }
 
+    .board-suggestion-layer {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 3;
+    }
+
+    .placement-suggestion {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      background: rgba(15, 23, 42, 0.2);
+    }
+
+    .placement-suggestion-point {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+    }
+
+    .placement-suggestion-road {
+      width: 26px;
+      height: 6px;
+      border-radius: 999px;
+    }
+
     .board-map {
       display: flex;
       flex-direction: column;
@@ -291,8 +318,8 @@
     .board-slot {
       position: absolute;
       pointer-events: auto;
-      border: 2px solid #334155;
-      background: rgba(255, 255, 255, 0.78);
+      border: none;
+      background: transparent;
       color: #0f172a;
       display: inline-flex;
       align-items: center;
@@ -303,8 +330,8 @@
     }
 
     .board-slot-target {
-      border-color: #16a34a;
-      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.28);
+      background: rgba(34, 197, 94, 0.38);
+      box-shadow: none;
       cursor: pointer;
     }
 
@@ -632,6 +659,7 @@
         <div id="rollDisplay" class="mb-2"><strong>Last roll:</strong> None</div>
         <div class="board-map-wrapper">
           <div id="boardHexMap" class="board-map"></div>
+          <div id="boardSuggestionLayer" class="board-suggestion-layer"></div>
           <div id="boardRoadSlots" class="board-slot-layer"></div>
           <div id="boardPointSlots" class="board-slot-layer"></div>
         </div>
@@ -693,6 +721,7 @@
     const undoButton = document.getElementById('undoButton')
     const flipButton = document.getElementById('flipButton')
     const boardHexMap = document.getElementById('boardHexMap')
+    const boardSuggestionLayer = document.getElementById('boardSuggestionLayer')
     const boardRoadSlots = document.getElementById('boardRoadSlots')
     const boardPointSlots = document.getElementById('boardPointSlots')
     const winnerOverlay = document.getElementById('winnerOverlay')
@@ -737,6 +766,63 @@
         }
 
         boardHexMap.appendChild(row)
+      })
+    }
+
+    function renderPlacementSuggestions() {
+      boardSuggestionLayer.innerHTML = ''
+
+      const wrapperRect = boardSuggestionLayer.getBoundingClientRect()
+      const hexNodes = boardHexMap.querySelectorAll('.board-hex')
+      const pointAngles = [-90, -30, 30, 90, 150, 210]
+      const roadAngles = [-60, 0, 60, 120, 180, 240]
+      const usedPointSlots = new Set()
+      const usedRoadSlots = new Set()
+
+      hexNodes.forEach((hexNode) => {
+        const rect = hexNode.getBoundingClientRect()
+        const centerX = rect.left - wrapperRect.left + (rect.width / 2)
+        const centerY = rect.top - wrapperRect.top + (rect.height / 2)
+        const size = Math.min(rect.width, rect.height)
+        const pointRadius = size * 0.5
+        const roadRadius = size * 0.37
+
+        pointAngles.forEach((angle) => {
+          const radians = (angle * Math.PI) / 180
+          const x = centerX + (Math.cos(radians) * pointRadius)
+          const y = centerY + (Math.sin(radians) * pointRadius)
+          const key = `${Math.round(x / 8)}:${Math.round(y / 8)}`
+
+          if (usedPointSlots.has(key)) {
+            return
+          }
+          usedPointSlots.add(key)
+
+          const marker = document.createElement('span')
+          marker.className = 'placement-suggestion placement-suggestion-point'
+          marker.style.left = `${x}px`
+          marker.style.top = `${y}px`
+          boardSuggestionLayer.appendChild(marker)
+        })
+
+        roadAngles.forEach((angle) => {
+          const radians = (angle * Math.PI) / 180
+          const x = centerX + (Math.cos(radians) * roadRadius)
+          const y = centerY + (Math.sin(radians) * roadRadius)
+          const key = `${Math.round(x / 8)}:${Math.round(y / 8)}:${Math.round(angle / 15)}`
+
+          if (usedRoadSlots.has(key)) {
+            return
+          }
+          usedRoadSlots.add(key)
+
+          const marker = document.createElement('span')
+          marker.className = 'placement-suggestion placement-suggestion-road'
+          marker.style.left = `${x}px`
+          marker.style.top = `${y}px`
+          marker.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`
+          boardSuggestionLayer.appendChild(marker)
+        })
       })
     }
 
@@ -855,7 +941,6 @@
 
         if (isOwned) {
           button.style.background = slot.ownerColor || '#9ca3af'
-          button.style.borderColor = slot.ownerColor || '#6b7280'
         }
 
         button.title = isOwned ? 'Road occupied' : canPlaceRoad ? 'Place road here' : 'Empty road slot'
@@ -887,11 +972,11 @@
 
         if (!isFree) {
           button.style.background = slot.ownerColor || '#9ca3af'
-          button.style.borderColor = slot.ownerColor || '#6b7280'
           button.textContent = slot.pieceType === 'city' ? '🏰' : '🏠'
           button.style.color = '#ffffff'
         } else {
-          button.textContent = '+'
+          button.textContent = ''
+          button.style.background = 'transparent'
           button.style.color = canUsePoint ? currentPlayerColor : '#334155'
         }
 
@@ -928,6 +1013,7 @@
       const playerResourcesForHand = currentPlayer?.resources || {}
 
       renderBoardHexMap()
+      renderPlacementSuggestions()
 
       if (!currentPlayer) {
         selectedPlacementPiece = null
@@ -1436,6 +1522,10 @@
     window.addEventListener('load', async () => {
       const savedPlayer = loadPlayerIdentity()
       await ensurePlayerSession(savedPlayer)
+    })
+
+    window.addEventListener('resize', () => {
+      render()
     })
 
     render()
