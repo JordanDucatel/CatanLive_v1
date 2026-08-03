@@ -207,50 +207,76 @@
       margin-top: 10px;
     }
 
-    .hexagon {
-      width: 180px;
-      height: 180px;
-      background: #f8fafc;
-      clip-path: polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%);
+    .board-map-wrapper {
+      position: relative;
+      width: min(100%, 560px);
+      margin-top: 8px;
+      padding-top: 14px;
+      padding-bottom: 18px;
+    }
+
+    .board-map {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .board-row {
+      display: flex;
+      justify-content: center;
+      margin-top: -22px;
+    }
+
+    .board-row:first-child {
+      margin-top: 0;
+    }
+
+    .board-hex {
+      width: 102px;
+      height: 112px;
+      margin-left: -4px;
+      margin-right: -4px;
+      clip-path: polygon(50% 2.5%, 95% 25%, 95% 75%, 50% 97.5%, 5% 75%, 5% 25%);
+      border: 2px solid rgba(15, 23, 42, 0.3);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: #1f2937;
-      box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.08);
-      text-align: center;
-      padding: 10px;
+      gap: 8px;
+      color: #0f172a;
+      position: relative;
     }
 
-    .hexagon-wrapper {
-      position: relative;
-      width: 200px;
-      height: 200px;
-      display: flex;
+    .board-hex-name {
+      font-size: 0.75rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.2px;
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+    }
+
+    .board-hex-pip {
+      min-width: 28px;
+      height: 28px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.86);
+      display: inline-flex;
       align-items: center;
       justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 800;
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
     }
 
-    .hex-overlay {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      z-index: 2;
+    .board-hex-desert {
+      background: #f2d9a6 !important;
+      border-color: rgba(146, 64, 14, 0.42);
     }
 
-    .hex-overlay polygon {
-      fill: none;
-      stroke: #0f172a;
-      stroke-width: 8;
-      stroke-linejoin: round;
-    }
-
-    .hex-overlay circle {
-      fill: #0f172a;
+    .board-hex-desert .board-hex-pip {
+      visibility: hidden;
     }
 
     .board-slot-layer {
@@ -288,12 +314,12 @@
       border-radius: 999px;
     }
 
-    .board-slot-road.r0 { left: 75px; top: 6px; }
-    .board-slot-road.r1 { left: 145px; top: 48px; transform: rotate(60deg); }
-    .board-slot-road.r2 { left: 145px; top: 136px; transform: rotate(-60deg); }
-    .board-slot-road.r3 { left: 75px; top: 178px; }
-    .board-slot-road.r4 { left: 4px; top: 136px; transform: rotate(60deg); }
-    .board-slot-road.r5 { left: 4px; top: 48px; transform: rotate(-60deg); }
+    .board-slot-road.r0 { left: 45%; top: 29%; }
+    .board-slot-road.r1 { left: 58%; top: 40%; transform: rotate(60deg); }
+    .board-slot-road.r2 { left: 58%; top: 56%; transform: rotate(-60deg); }
+    .board-slot-road.r3 { left: 45%; top: 67%; }
+    .board-slot-road.r4 { left: 31%; top: 56%; transform: rotate(60deg); }
+    .board-slot-road.r5 { left: 31%; top: 40%; transform: rotate(-60deg); }
 
     .board-slot-point {
       width: 26px;
@@ -302,12 +328,12 @@
       font-size: 0.72rem;
     }
 
-    .board-slot-point.p0 { left: 37px; top: 0px; }
-    .board-slot-point.p1 { left: 137px; top: 0px; }
-    .board-slot-point.p2 { left: 176px; top: 87px; }
-    .board-slot-point.p3 { left: 137px; top: 173px; }
-    .board-slot-point.p4 { left: 37px; top: 173px; }
-    .board-slot-point.p5 { left: -2px; top: 87px; }
+    .board-slot-point.p0 { left: 39%; top: 24%; }
+    .board-slot-point.p1 { left: 55%; top: 24%; }
+    .board-slot-point.p2 { left: 64%; top: 48%; }
+    .board-slot-point.p3 { left: 55%; top: 70%; }
+    .board-slot-point.p4 { left: 39%; top: 70%; }
+    .board-slot-point.p5 { left: 30%; top: 48%; }
 
     .resource-list {
       display: flex;
@@ -534,14 +560,25 @@
         gap: 14px;
       }
 
-      .hexagon {
-        width: 150px;
-        height: 150px;
+      .board-map-wrapper {
+        width: 100%;
       }
 
-      .hexagon-wrapper {
-        width: 170px;
-        height: 170px;
+      .board-hex {
+        width: 82px;
+        height: 90px;
+        margin-left: -5px;
+        margin-right: -5px;
+      }
+
+      .board-hex-name {
+        font-size: 0.62rem;
+      }
+
+      .board-hex-pip {
+        min-width: 22px;
+        height: 22px;
+        font-size: 0.72rem;
       }
 
       .bank-grid {
@@ -593,19 +630,10 @@
           </div>
         </div>
         <div id="rollDisplay" class="mb-2"><strong>Last roll:</strong> None</div>
-        <div class="hexagon-wrapper">
-          <svg class="hex-overlay" viewBox="0 0 200 200" aria-hidden="true">
-            <polygon points="50,13 150,13 190,100 150,187 50,187 10,100"></polygon>
-            <circle cx="50" cy="13" r="5"></circle>
-            <circle cx="150" cy="13" r="5"></circle>
-            <circle cx="190" cy="100" r="5"></circle>
-            <circle cx="150" cy="187" r="5"></circle>
-            <circle cx="50" cy="187" r="5"></circle>
-            <circle cx="10" cy="100" r="5"></circle>
-          </svg>
+        <div class="board-map-wrapper">
+          <div id="boardHexMap" class="board-map"></div>
           <div id="boardRoadSlots" class="board-slot-layer"></div>
           <div id="boardPointSlots" class="board-slot-layer"></div>
-          <div id="hexagon" class="hexagon"><span id="hexagonText">Hexagon</span><span id="hexagonPip">-</span></div>
         </div>
         <div id="winnerOverlay" class="winner-overlay">
           <div id="winnerBanner" class="winner-banner"></div>
@@ -664,9 +692,7 @@
     const largestArmyButton = document.getElementById('largestArmyButton')
     const undoButton = document.getElementById('undoButton')
     const flipButton = document.getElementById('flipButton')
-    const hexagon = document.getElementById('hexagon')
-    const hexagonText = document.getElementById('hexagonText')
-    const hexagonPip = document.getElementById('hexagonPip')
+    const boardHexMap = document.getElementById('boardHexMap')
     const boardRoadSlots = document.getElementById('boardRoadSlots')
     const boardPointSlots = document.getElementById('boardPointSlots')
     const winnerOverlay = document.getElementById('winnerOverlay')
@@ -677,7 +703,41 @@
       Wheat: '#facc15',
       Ore: '#9ca3af',
       Wood: '#15803d',
-      Brick: '#b45309'
+      Brick: '#b45309',
+      Desert: '#f2d9a6'
+    }
+
+    function renderBoardHexMap() {
+      const countsPerRow = [3, 4, 5, 4, 3]
+      const boardHexes = Array.isArray(state.board?.hexes) ? state.board.hexes : []
+
+      boardHexMap.innerHTML = ''
+      let index = 0
+
+      countsPerRow.forEach((count) => {
+        const row = document.createElement('div')
+        row.className = 'board-row'
+
+        for (let column = 0; column < count; column += 1) {
+          const hex = boardHexes[index] || { resource: null, pip: null }
+          index += 1
+
+          const tile = document.createElement('div')
+          tile.className = 'board-hex'
+
+          const resourceName = hex.resource || 'Unknown'
+          if (resourceName === 'Desert') {
+            tile.classList.add('board-hex-desert')
+          }
+
+          tile.style.background = resourceColors[resourceName] || '#f8fafc'
+          const pipText = hex.pip === null || hex.pip === undefined ? '-' : String(hex.pip)
+          tile.innerHTML = `<span class="board-hex-name">${resourceName}</span><span class="board-hex-pip">${pipText}</span>`
+          row.appendChild(tile)
+        }
+
+        boardHexMap.appendChild(row)
+      })
     }
 
     function getCurrentPlayer() {
@@ -867,6 +927,8 @@
       const bank = state.bank || { resources: {}, developmentCards: {} }
       const playerResourcesForHand = currentPlayer?.resources || {}
 
+      renderBoardHexMap()
+
       if (!currentPlayer) {
         selectedPlacementPiece = null
       } else if (selectedPlacementPiece && getPieceCount(currentPlayer, selectedPlacementPiece) <= 0) {
@@ -1054,16 +1116,6 @@
       } else {
         rollDisplay.innerHTML = '<strong>Last roll:</strong> None'
       }
-
-      if (state.boardResource) {
-        hexagon.style.background = resourceColors[state.boardResource] || '#f8fafc'
-        hexagonText.textContent = state.boardResource
-      } else {
-        hexagon.style.background = '#f8fafc'
-        hexagonText.textContent = 'Hexagon'
-      }
-
-      hexagonPip.textContent = state.boardPip !== null && state.boardPip !== undefined ? state.boardPip : '-'
 
       const phaseButtons = phaseBar.querySelectorAll('.phase-chip')
       phaseButtons.forEach((button) => {

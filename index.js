@@ -15,6 +15,15 @@ const resourceTypes = [
   { name: 'Wood', color: '#15803d' },
   { name: 'Brick', color: '#b45309' }
 ]
+const boardTileDistribution = [
+  'Ore', 'Ore', 'Ore',
+  'Wheat', 'Wheat', 'Wheat', 'Wheat',
+  'Wood', 'Wood', 'Wood', 'Wood',
+  'Sheep', 'Sheep', 'Sheep', 'Sheep',
+  'Brick', 'Brick', 'Brick',
+  'Desert'
+]
+const boardPipDistribution = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12]
 const developmentCardTypes = [
   { key: 'knights', name: 'Knight' },
   { key: 'victoryPoints', name: 'Victory Point' },
@@ -52,6 +61,7 @@ let winnerPlayerId = null
 let winnerName = null
 let boardRoads = []
 let boardPoints = []
+let boardHexes = []
 
 function createEmptyBoardRoads() {
   return Array.from({ length: 6 }, (_, id) => ({
@@ -68,6 +78,60 @@ function createEmptyBoardPoints() {
     ownerColor: null,
     pieceType: null
   }))
+}
+
+function shuffle(list) {
+  const next = list.slice()
+  for (let index = next.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1))
+    const temp = next[index]
+    next[index] = next[swapIndex]
+    next[swapIndex] = temp
+  }
+  return next
+}
+
+function buildBoardHexes(tiles, pips) {
+  const next = []
+  let pipIndex = 0
+
+  for (let id = 0; id < 19; id += 1) {
+    const resource = tiles[id]
+    const pip = resource === 'Desert' ? null : pips[pipIndex++]
+    next.push({ id, resource, pip })
+  }
+
+  return next
+}
+
+function randomizeBoardResources() {
+  const shuffledTiles = shuffle(boardTileDistribution)
+  const pipsByHexId = Array.from({ length: 19 }, (_, id) => boardHexes[id]?.pip ?? null)
+
+  boardHexes = shuffledTiles.map((resource, id) => ({
+    id,
+    resource,
+    pip: resource === 'Desert' ? null : pipsByHexId[id]
+  }))
+}
+
+function randomizeBoardPips() {
+  const shuffledPips = shuffle(boardPipDistribution)
+  let pipIndex = 0
+  boardHexes = boardHexes.map((hex) => {
+    if (hex.resource === 'Desert') {
+      return { ...hex, pip: null }
+    }
+
+    const pip = shuffledPips[pipIndex++]
+    return { ...hex, pip }
+  })
+}
+
+function initializeBoardHexes() {
+  const shuffledTiles = shuffle(boardTileDistribution)
+  const shuffledPips = shuffle(boardPipDistribution)
+  boardHexes = buildBoardHexes(shuffledTiles, shuffledPips)
 }
 
 function addEvent(message) {
@@ -147,6 +211,7 @@ function captureSnapshot() {
     largestArmyPlayerId,
     boardRoads: boardRoads.map((slot) => ({ ...slot })),
     boardPoints: boardPoints.map((slot) => ({ ...slot })),
+    boardHexes: boardHexes.map((hex) => ({ ...hex })),
     bankResources: { ...bankResources },
     bankDevelopmentCards: { ...bankDevelopmentCards }
   }
@@ -173,6 +238,7 @@ function restoreSnapshot(snapshot) {
   largestArmyPlayerId = snapshot.largestArmyPlayerId
   boardRoads = (snapshot.boardRoads || []).map((slot) => ({ ...slot }))
   boardPoints = (snapshot.boardPoints || []).map((slot) => ({ ...slot }))
+  boardHexes = (snapshot.boardHexes || []).map((hex) => ({ ...hex }))
   Object.keys(bankResources).forEach((resource) => {
     bankResources[resource] = snapshot.bankResources[resource]
   })
@@ -196,6 +262,7 @@ function resetGameState() {
   largestArmyPlayerId = null
   boardRoads = createEmptyBoardRoads()
   boardPoints = createEmptyBoardPoints()
+  initializeBoardHexes()
   nextPlayerId = 1
   Object.keys(bankResources).forEach((resource) => {
     bankResources[resource] = 19
@@ -233,6 +300,7 @@ function getState() {
     boardResource,
     boardPip,
     board: {
+      hexes: boardHexes.map((hex) => ({ ...hex })),
       roads: boardRoads.map((slot) => ({ ...slot })),
       points: boardPoints.map((slot) => ({ ...slot }))
     },
@@ -297,6 +365,7 @@ function getPhaseLabel(phase) {
 }
 
 initializeBoardState()
+initializeBoardHexes()
 syncSetupModeWithPhase()
 
 app
@@ -719,11 +788,9 @@ app
       return res.status(400).json({ error: 'Tiles can only be randomized during board setup.' })
     }
 
-    const resource = resourceTypes[Math.floor(Math.random() * resourceTypes.length)]
-    pushHistory(`${displayName} randomized the tile.`, displayName)
-    boardResource = resource.name
-    boardPip = boardPip || null
-    addEvent(`${displayName} randomized the tile to ${resource.name}.`)
+    pushHistory(`${displayName} randomized the board tiles.`, displayName)
+    randomizeBoardResources()
+    addEvent(`${displayName} randomized the board tiles.`)
     broadcastState()
 
     return res.json({ state: getState() })
@@ -742,9 +809,9 @@ app
       return res.status(400).json({ error: 'Pips can only be randomized during board setup.' })
     }
 
-    pushHistory(`${displayName} randomized the pip value.`, displayName)
-    boardPip = dicePool[Math.floor(Math.random() * dicePool.length)]
-    addEvent(`${displayName} randomized the pip value to ${boardPip}.`)
+    pushHistory(`${displayName} randomized the board pips.`, displayName)
+    randomizeBoardPips()
+    addEvent(`${displayName} randomized the board pips.`)
     broadcastState()
 
     return res.json({ state: getState() })
